@@ -61,7 +61,7 @@ cd AIChatbot
 2. **Tạo file `.env` cho backend:**
 ```bash
 cd backend
-cp .env.example .env
+cp env.example .env
 # Chỉnh sửa .env với các giá trị thực tế của bạn
 ```
 
@@ -225,4 +225,4 @@ MIT License
 
 ## 📞 Liên hệ
 
-Nếu có thắc mắc, vui lòng tạo issue trên GitHub repository.
+Nếu có thắc mắc, vui lòng tạo issue trên GitLab repository.
