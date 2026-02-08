@@ -226,3 +226,5 @@ MIT License
 ## 📞 Liên hệ
 
 Nếu có thắc mắc, vui lòng tạo issue trên GitLab repository.
+
+<!-- Leaving a comment -->
