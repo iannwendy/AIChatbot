@@ -5,12 +5,14 @@ Hệ thống web Full-stack tích hợp AI để hỗ trợ sinh viên giải đ
 ## 🛠️ Công nghệ sử dụng
 
 ### Frontend
+
 - **ReactJS** với TypeScript
 - **Material-UI** cho giao diện
 - **React Router** cho routing
 - **Axios** cho API calls
 
 ### Backend
+
 - **Django** với Django REST Framework
 - **MongoDB** cho database chính
 - **ChromaDB** cho Vector Database
@@ -18,6 +20,7 @@ Hệ thống web Full-stack tích hợp AI để hỗ trợ sinh viên giải đ
 - **OpenAI API** cho LLM
 
 ### Infrastructure
+
 - **Docker** & **Docker Compose** cho containerization
 
 ## 📁 Cấu trúc dự án
@@ -48,17 +51,20 @@ AIChatbot/
 ## 🚀 Cài đặt và chạy dự án
 
 ### Yêu cầu
+
 - Docker và Docker Compose
 - (Tùy chọn) Python 3.11+ và Node.js 18+ nếu chạy local
 
 ### Chạy với Docker (Khuyến nghị)
 
 1. **Clone repository và vào thư mục dự án:**
+
 ```bash
 cd AIChatbot
 ```
 
 2. **Tạo file `.env` cho backend:**
+
 ```bash
 cd backend
 cp env.example .env
@@ -66,11 +72,13 @@ cp env.example .env
 ```
 
 3. **Chạy toàn bộ hệ thống:**
+
 ```bash
 docker-compose up --build
 ```
 
 Hệ thống sẽ chạy trên:
+
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - MongoDB: localhost:27017
@@ -81,6 +89,7 @@ Hệ thống sẽ chạy trên:
 #### Backend
 
 1. **Tạo virtual environment:**
+
 ```bash
 cd backend
 python3 -m venv venv
@@ -88,21 +97,25 @@ source venv/bin/activate  # Trên Windows: venv\Scripts\activate
 ```
 
 2. **Cài đặt dependencies:**
+
 ```bash
 pip install -r requirements.txt
 ```
 
 3. **Chạy migrations:**
+
 ```bash
 python manage.py migrate
 ```
 
 4. **Tạo superuser:**
+
 ```bash
 python manage.py createsuperuser
 ```
 
 5. **Chạy server:**
+
 ```bash
 python manage.py runserver
 ```
@@ -110,12 +123,14 @@ python manage.py runserver
 #### Frontend
 
 1. **Cài đặt dependencies:**
+
 ```bash
 cd frontend
 npm install
 ```
 
 2. **Chạy development server:**
+
 ```bash
 npm start
 ```
@@ -123,6 +138,7 @@ npm start
 ## 📝 Các tính năng đã triển khai
 
 ### Cấp độ 1: Cơ bản (Khung sườn)
+
 - ✅ Cấu trúc dự án Full-stack
 - ✅ Django backend với REST API
 - ✅ React frontend với routing
@@ -136,17 +152,20 @@ npm start
 - ⏳ Lưu lịch sử chat (models đã tạo)
 
 ### Cấp độ 2: RAG Cơ bản (Chưa triển khai)
+
 - ⏳ Xử lý tài liệu (Parsing, Chunking)
 - ⏳ Embedding và lưu vào Vector DB
 - ⏳ Chat hỏi đáp với RAG
 - ⏳ Trích dẫn nguồn
 
 ### Cấp độ 3: Nâng cao (Chưa triển khai)
+
 - ⏳ Streaming Response
 - ⏳ Quản lý ngữ cảnh hội thoại
 - ⏳ Tùy chọn Model
 
 ### Cấp độ 4: Chuyên sâu (Chưa triển khai)
+
 - ⏳ Function Calling / Agent
 - ⏳ Tạo bài tập trắc nghiệm
 - ⏳ Hybrid Search
@@ -181,24 +200,29 @@ CHROMA_DB_PATH=/app/chroma_db
 ## 📚 API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/google/` - Đăng nhập với Google
 
 ### Users
+
 - `GET /api/users/` - Danh sách người dùng
 - `GET /api/users/students/` - Danh sách sinh viên
 - `GET /api/users/teachers/` - Danh sách giáo viên
 
 ### Courses
+
 - `GET /api/courses/` - Danh sách môn học
 - `POST /api/courses/` - Tạo môn học mới
 - `GET /api/courses/{id}/` - Chi tiết môn học
 
 ### Documents
+
 - `GET /api/documents/` - Danh sách tài liệu
 - `POST /api/documents/` - Upload tài liệu
 - `POST /api/documents/{id}/process/` - Xử lý tài liệu cho RAG
 
 ### Chat
+
 - `GET /api/chat/sessions/` - Danh sách phiên chat
 - `POST /api/chat/sessions/` - Tạo phiên chat mới
 - `POST /api/chat/sessions/{id}/send_message/` - Gửi tin nhắn
@@ -229,3 +253,23 @@ Nếu có thắc mắc, vui lòng tạo issue trên GitLab repository.
 
 <!-- Leaving a comment -->
 <!-- Leaving a comment -->
+<!-- ## RAG Workflow
+
+1. A document is uploaded and stored in the system.
+2. The document is parsed and split into smaller chunks.
+3. Each chunk is converted into embeddings using OpenAI Embedding API.
+4. Embeddings are stored in ChromaDB.
+5. When a user submits a question:
+   - The question is converted into an embedding.
+   - The system retrieves the most relevant document chunks from ChromaDB.
+   - Retrieved context is sent to the LLM.
+   - The LLM generates a grounded response.
+6. The answer and its references are returned to the user. -->
+
+<!-- ## Future Improvements
+
+- Implement Hybrid Search (BM25 + Vector Search)
+- Add multi-modal support (PDF, images)
+- Improve conversation memory management
+- Fine-tune smaller open-source models
+- Add analytics dashboard for teachers -->
