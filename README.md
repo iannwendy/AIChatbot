@@ -1,161 +1,161 @@
-# AI Chatbot - Hệ thống hỗ trợ sinh viên với RAG
+# AI Chatbot - Student Support System with RAG
 
-Hệ thống web Full-stack tích hợp AI để hỗ trợ sinh viên giải đáp thắc mắc về môn học sử dụng kỹ thuật RAG (Retrieval-Augmented Generation).
+A Full-stack web application integrated with AI to help students answer questions about specific subjects using RAG (Retrieval-Augmented Generation) technology.
 
-## 🛠️ Công nghệ sử dụng
+## 🛠️ Technologies Used
 
 ### Frontend
-- **ReactJS** với TypeScript
-- **Material-UI** cho giao diện
-- **React Router** cho routing
-- **Axios** cho API calls
+- **ReactJS** with TypeScript
+- **Material-UI** for UI components
+- **React Router** for routing
+- **Axios** for API calls
 
 ### Backend
-- **Django** với Django REST Framework
-- **MongoDB** cho database chính
-- **ChromaDB** cho Vector Database
-- **LangChain** cho AI/LLM integration
-- **OpenAI API** cho LLM
+- **Django** with Django REST Framework
+- **MongoDB** for main database
+- **ChromaDB** for Vector Database
+- **LangChain** for AI/LLM integration
+- **OpenAI API** for LLM
 
 ### Infrastructure
-- **Docker** & **Docker Compose** cho containerization
+- **Docker** & **Docker Compose** for containerization
 
-## 📁 Cấu trúc dự án
+## 📁 Project Structure
 
 ```
 AIChatbot/
 ├── backend/                 # Django backend
 │   ├── apps/               # Django apps
-│   │   ├── authentication/  # Xác thực người dùng
-│   │   ├── users/            # Quản lý người dùng
-│   │   ├── courses/          # Quản lý môn học
-│   │   ├── documents/        # Quản lý tài liệu
-│   │   └── chat/             # Chat và RAG
-│   ├── config/             # Cấu hình Django
+│   │   ├── authentication/  # User authentication
+│   │   ├── users/           # User management
+│   │   ├── courses/         # Course management
+│   │   ├── documents/       # Document management
+│   │   └── chat/            # Chat and RAG
+│   ├── config/             # Django configuration
 │   ├── manage.py
 │   └── requirements.txt
 ├── frontend/               # React frontend
 │   ├── src/
 │   │   ├── components/     # React components
-│   │   ├── pages/         # Các trang
-│   │   ├── services/      # API services
+│   │   ├── pages/          # Pages
+│   │   ├── services/       # API services
 │   │   └── App.tsx
 │   └── package.json
 ├── docker-compose.yml      # Docker Compose config
 └── README.md
 ```
 
-## 🚀 Cài đặt và chạy dự án
+## 🚀 Installation and Setup
 
-### Yêu cầu
-- Docker và Docker Compose
-- (Tùy chọn) Python 3.11+ và Node.js 18+ nếu chạy local
+### Requirements
+- Docker and Docker Compose
+- (Optional) Python 3.11+ and Node.js 18+ for local development
 
-### Chạy với Docker (Khuyến nghị)
+### Running with Docker (Recommended)
 
-1. **Clone repository và vào thư mục dự án:**
+1. **Clone repository and navigate to project directory:**
 ```bash
 cd AIChatbot
 ```
 
-2. **Tạo file `.env` cho backend:**
+2. **Create `.env` file for backend:**
 ```bash
 cd backend
 cp env.example .env
-# Chỉnh sửa .env với các giá trị thực tế của bạn
+# Edit .env with your actual values
 ```
 
-3. **Chạy toàn bộ hệ thống:**
+3. **Run the entire system:**
 ```bash
 docker-compose up --build
 ```
 
-Hệ thống sẽ chạy trên:
+The system will run on:
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - MongoDB: localhost:27017
 - ChromaDB: http://localhost:8001
 
-### Chạy local (Development)
+### Running Locally (Development)
 
 #### Backend
 
-1. **Tạo virtual environment:**
+1. **Create virtual environment:**
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate  # Trên Windows: venv\Scripts\activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-2. **Cài đặt dependencies:**
+2. **Install dependencies:**
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Chạy migrations:**
+3. **Run migrations:**
 ```bash
 python manage.py migrate
 ```
 
-4. **Tạo superuser:**
+4. **Create superuser:**
 ```bash
 python manage.py createsuperuser
 ```
 
-5. **Chạy server:**
+5. **Run server:**
 ```bash
 python manage.py runserver
 ```
 
 #### Frontend
 
-1. **Cài đặt dependencies:**
+1. **Install dependencies:**
 ```bash
 cd frontend
 npm install
 ```
 
-2. **Chạy development server:**
+2. **Run development server:**
 ```bash
 npm start
 ```
 
-## 📝 Các tính năng đã triển khai
+## 📝 Implemented Features
 
-### Cấp độ 1: Cơ bản (Khung sườn)
-- ✅ Cấu trúc dự án Full-stack
-- ✅ Django backend với REST API
-- ✅ React frontend với routing
+### Level 1: Basic (Foundation)
+- ✅ Full-stack project structure
+- ✅ Django backend with REST API
+- ✅ React frontend with routing
 - ✅ MongoDB database setup
 - ✅ ChromaDB vector database setup
 - ✅ Docker Compose configuration
-- ⏳ Authentication với Google OAuth (placeholder)
-- ⏳ Quản lý người dùng, môn học (models đã tạo)
-- ⏳ Upload và quản lý tài liệu (models đã tạo)
-- ⏳ Giao diện chat cơ bản (UI đã tạo)
-- ⏳ Lưu lịch sử chat (models đã tạo)
+- ⏳ Google OAuth authentication (placeholder)
+- ⏳ User and course management (models created)
+- ⏳ Document upload and management (models created)
+- ⏳ Basic chat interface (UI created)
+- ⏳ Chat history storage (models created)
 
-### Cấp độ 2: RAG Cơ bản (Chưa triển khai)
-- ⏳ Xử lý tài liệu (Parsing, Chunking)
-- ⏳ Embedding và lưu vào Vector DB
-- ⏳ Chat hỏi đáp với RAG
-- ⏳ Trích dẫn nguồn
+### Level 2: Basic RAG (Not Implemented)
+- ⏳ Document processing (Parsing, Chunking)
+- ⏳ Embedding and storage in Vector DB
+- ⏳ RAG-based Q&A chat
+- ⏳ Source citation
 
-### Cấp độ 3: Nâng cao (Chưa triển khai)
+### Level 3: Advanced (Not Implemented)
 - ⏳ Streaming Response
-- ⏳ Quản lý ngữ cảnh hội thoại
-- ⏳ Tùy chọn Model
+- ⏳ Conversation context management
+- ⏳ Model selection
 
-### Cấp độ 4: Chuyên sâu (Chưa triển khai)
+### Level 4: Advanced & Agent (Not Implemented)
 - ⏳ Function Calling / Agent
-- ⏳ Tạo bài tập trắc nghiệm
+- ⏳ Quiz generator
 - ⏳ Hybrid Search
 
-## 🔧 Cấu hình
+## 🔧 Configuration
 
 ### Environment Variables
 
-Tạo file `backend/.env` với các biến sau:
+Create `backend/.env` file with the following variables:
 
 ```env
 SECRET_KEY=your-secret-key
@@ -181,27 +181,27 @@ CHROMA_DB_PATH=/app/chroma_db
 ## 📚 API Endpoints
 
 ### Authentication
-- `POST /api/auth/google/` - Đăng nhập với Google
+- `POST /api/auth/google/` - Login with Google
 
 ### Users
-- `GET /api/users/` - Danh sách người dùng
-- `GET /api/users/students/` - Danh sách sinh viên
-- `GET /api/users/teachers/` - Danh sách giáo viên
+- `GET /api/users/` - List users
+- `GET /api/users/students/` - List students
+- `GET /api/users/teachers/` - List teachers
 
 ### Courses
-- `GET /api/courses/` - Danh sách môn học
-- `POST /api/courses/` - Tạo môn học mới
-- `GET /api/courses/{id}/` - Chi tiết môn học
+- `GET /api/courses/` - List courses
+- `POST /api/courses/` - Create new course
+- `GET /api/courses/{id}/` - Course details
 
 ### Documents
-- `GET /api/documents/` - Danh sách tài liệu
-- `POST /api/documents/` - Upload tài liệu
-- `POST /api/documents/{id}/process/` - Xử lý tài liệu cho RAG
+- `GET /api/documents/` - List documents
+- `POST /api/documents/` - Upload document
+- `POST /api/documents/{id}/process/` - Process document for RAG
 
 ### Chat
-- `GET /api/chat/sessions/` - Danh sách phiên chat
-- `POST /api/chat/sessions/` - Tạo phiên chat mới
-- `POST /api/chat/sessions/{id}/send_message/` - Gửi tin nhắn
+- `GET /api/chat/sessions/` - List chat sessions
+- `POST /api/chat/sessions/` - Create new chat session
+- `POST /api/chat/sessions/{id}/send_message/` - Send message
 
 ## 🧪 Testing
 
@@ -223,6 +223,6 @@ MIT License
 
 - [Your Name]
 
-## 📞 Liên hệ
+## 📞 Contact
 
-Nếu có thắc mắc, vui lòng tạo issue trên GitLab repository.
+If you have any questions, please create an issue on the GitLab repository.
