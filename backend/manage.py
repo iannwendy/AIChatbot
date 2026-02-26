@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
+# khai bao 
 import os
 import sys
 
@@ -17,6 +18,8 @@ def main():
         ) from exc
     execute_from_command_line(sys.argv)
 
+
+# this file manage code 
 
 if __name__ == '__main__':
     main()
