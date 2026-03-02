@@ -41,14 +41,8 @@ services:
       - ./backend:/app
       - backend_media:/app/media
       - backend_static:/app/staticfiles
-    environment:
-      - DEBUG=True
-      - SECRET_KEY=django-insecure-dev-key-change-in-production
-      - MONGO_HOST=mongodb://mongodb:27017/
-      - MONGO_DB_NAME=aichatbot
-      - CHROMA_DB_PATH=/app/chroma_db
-      - GOOGLE_OAUTH2_CLIENT_ID=YOUR_CLIENT_ID_HERE
-      - GOOGLE_OAUTH2_CLIENT_SECRET=YOUR_CLIENT_SECRET_HERE
+    env_file:
+      - ./backend/.env
     depends_on:
       - mongodb
       - chromadb
