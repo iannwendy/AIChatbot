@@ -1,29 +1,29 @@
 # AI Chatbot - Student Support System with RAG
 
-A Full-stack web application integrated with AI to help students answer questions about specific subjects using RAG (Retrieval-Augmented Generation) technology.œ
+A Full-stack web application integrated with AI to help students answer questions about specific subjects using RAG (Retrieval-Augmented Generation) technology.
 
-## 🛠️ Technologies Used
+## Technologies Used
 
 ### Frontend
 
-- **ReactJS** with TypeScript
-- **Material-UI** for UI components
-- **React Router** for routing
-- **Axios** for API calls
+- ReactJS with TypeScript
+- Material-UI for UI components
+- React Router for routing
+- Axios for API calls
 
 ### Backend
 
-- **Django** with Django REST Framework
-- **MongoDB** for main database
-- **ChromaDB** for Vector Database
-- **LangChain** for AI/LLM integration
-- **OpenAI API** for LLM
+- Django with Django REST Framework
+- MongoDB for main database
+- ChromaDB for Vector Database
+- LangChain for AI/LLM integration
+- OpenAI API for LLM
 
 ### Infrastructure
 
-- **Docker** & **Docker Compose** for containerization
+- Docker and Docker Compose for containerization
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 AIChatbot/
@@ -48,7 +48,7 @@ AIChatbot/
 └── README.md
 ```
 
-## 🚀 Installation and Setup
+## Installation and Setup
 
 ### Requirements
 
@@ -57,13 +57,13 @@ AIChatbot/
 
 ### Running with Docker (Recommended)
 
-1. **Clone repository and navigate to project directory:**
+1. Clone repository and navigate to project directory:
 
 ```bash
 cd AIChatbot
 ```
 
-2. **Create `.env` file for backend:**
+2. Create `.env` file for backend:
 
 ```bash
 cd backend
@@ -71,7 +71,7 @@ cp env.example .env
 # Edit .env with your actual values
 ```
 
-3. **Run the entire system:**
+3. Run the entire system:
 
 ```bash
 docker-compose up --build
@@ -88,7 +88,7 @@ The system will run on:
 
 #### Backend
 
-1. **Create virtual environment:**
+1. Create virtual environment:
 
 ```bash
 cd backend
@@ -96,25 +96,25 @@ python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-2. **Install dependencies:**
+2. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Run migrations:**
+3. Run migrations:
 
 ```bash
 python manage.py migrate
 ```
 
-4. **Create superuser:**
+4. Create superuser:
 
 ```bash
 python manage.py createsuperuser
 ```
 
-5. **Run server:**
+5. Run server:
 
 ```bash
 python manage.py runserver
@@ -122,55 +122,55 @@ python manage.py runserver
 
 #### Frontend
 
-1. **Install dependencies:**
+1. Install dependencies:
 
 ```bash
 cd frontend
 npm install
 ```
 
-2. **Run development server:**
+2. Run development server:
 
 ```bash
 npm start
 ```
 
-## 📝 Implemented Features
+## Implemented Features
 
 ### Level 1: Basic (Foundation)
 
-- ✅ Full-stack project structure
-- ✅ Django backend with REST API
-- ✅ React frontend with routing
-- ✅ MongoDB database setup
-- ✅ ChromaDB vector database setup
-- ✅ Docker Compose configuration
-- ⏳ Google OAuth authentication (placeholder)
-- ⏳ User and course management (models created)
-- ⏳ Document upload and management (models created)
-- ⏳ Basic chat interface (UI created)
-- ⏳ Chat history storage (models created)
+- Full-stack project structure
+- Django backend with REST API
+- React frontend with routing
+- MongoDB database setup
+- ChromaDB vector database setup
+- Docker Compose configuration
+- Google OAuth authentication (placeholder)
+- User and course management (models created)
+- Document upload and management (models created)
+- Basic chat interface (UI created)
+- Chat history storage (models created)
 
 ### Level 2: Basic RAG (Not Implemented)
 
-- ⏳ Document processing (Parsing, Chunking)
-- ⏳ Embedding and storage in Vector DB
-- ⏳ RAG-based Q&A chat
-- ⏳ Source citation
+- Document processing (Parsing, Chunking)
+- Embedding and storage in Vector DB
+- RAG-based Q&A chat
+- Source citation
 
 ### Level 3: Advanced (Not Implemented)
 
-- ⏳ Streaming Response
-- ⏳ Conversation context management
-- ⏳ Model selection
+- Streaming Response
+- Conversation context management
+- Model selection
 
 ### Level 4: Advanced & Agent (Not Implemented)
 
-- ⏳ Function Calling / Agent
-- ⏳ Quiz generator
-- ⏳ Hybrid Search
+- Function Calling / Agent
+- Quiz generator
+- Hybrid Search
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -197,64 +197,56 @@ OPENAI_API_KEY=your-openai-api-key
 CHROMA_DB_PATH=/app/chroma_db
 ```
 
-## 📚 API Endpoints
-
-<!-- Các api đơn giản để test -->
+## API Endpoints
 
 ### Authentication
 
-- `POST /api/auth/google/` - Login with Google
+- POST /api/auth/google/ - Login with Google
 
 ### Users
 
-- `GET /api/users/` - List users
-- `GET /api/users/students/` - List students
-- `GET /api/users/teachers/` - List teachers
+- GET /api/users/ - List users
+- GET /api/users/students/ - List students
+- GET /api/users/teachers/ - List teachers
 
 ### Courses
 
-- `GET /api/courses/` - List courses
-- `POST /api/courses/` - Create new course
-- `GET /api/courses/{id}/` - Course details
+- GET /api/courses/ - List courses
+- POST /api/courses/ - Create new course
+- GET /api/courses/{id}/ - Course details
 
 ### Documents
 
-- `GET /api/documents/` - List documents
-- `POST /api/documents/` - Upload document
-- `POST /api/documents/{id}/process/` - Process document for RAG
+- GET /api/documents/ - List documents
+- POST /api/documents/ - Upload document
+- POST /api/documents/{id}/process/ - Process document for RAG
 
 ### Chat
 
-- `GET /api/chat/sessions/` - List chat sessions
-- `POST /api/chat/sessions/` - Create new chat session
-- `POST /api/chat/sessions/{id}/send_message/` - Send message
+- GET /api/chat/sessions/ - List chat sessions
+- POST /api/chat/sessions/ - Create new chat session
+- POST /api/chat/sessions/{id}/send_message/ - Send message
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Backend tests
-# kiểm tra backend
 cd backend
 python manage.py test
 
 # Frontend tests
-# kiểm tra frontend
 cd frontend
 npm test
 ```
 
-## 📄 License
+## License
 
 MIT License
 
-## 👥 Contributors
+## Contributors
 
-- [Your Name]
+- Your Name
 
-## 📞 Contact
+## Contact
 
-If you have any questions, please create an issue on the GitLab repository.
-
-<!--New comment>
-<!--New comment>
-<!--New comment>
+If you have any questions, please create an issue on the GitHub or GitLab repository.
