@@ -4,7 +4,6 @@ from . import views
 
 router = DefaultRouter()
 router.register(r'sessions', views.ChatSessionViewSet, basename='chat-session')
-router.register(r'messages', views.ChatMessageViewSet, basename='chat-message')
 
 urlpatterns = [
     path('', include(router.urls)),

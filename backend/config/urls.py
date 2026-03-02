@@ -9,6 +9,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('apps.authentication.urls')),
+    path('api/auth/', include('social_django.urls', namespace='social')),  # Google OAuth
     path('api/users/', include('apps.users.urls')),
     path('api/courses/', include('apps.courses.urls')),
     path('api/documents/', include('apps.documents.urls')),

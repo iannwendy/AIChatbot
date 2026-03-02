@@ -17,3 +17,8 @@ google-auth-oauthlib==1.2.0
 Pillow==10.2.0
 celery==5.3.4
 redis==5.0.1
+social-auth-app-django==5.4.0
+python-jose==3.3.0
+cryptography==41.0.7
+openpyxl==3.1.2
+pandas==2.1.4

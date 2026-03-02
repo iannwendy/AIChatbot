@@ -1,6 +1,6 @@
 # AI Chatbot - Student Support System with RAG
 
-A Full-stack web application integrated with AI to help students answer questions about specific subjects using RAG (Retrieval-Augmented Generation) technology.
+A Full-stack web application integrated with AI to help students answer questions about specific subjects using RAG (Retrieval-Augmented Generation) technology.œ
 
 ## 🛠️ Technologies Used
 

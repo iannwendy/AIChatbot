@@ -40,3 +40,10 @@ Thumbs.db
 backend/media/
 backend/staticfiles/
 frontend/build/
+
+# Database
+*.sqlite3
+
+# Migrations (except __init__.py)
+backend/apps/*/migrations/
+!backend/apps/*/migrations/__init__.py

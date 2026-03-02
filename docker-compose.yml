@@ -47,6 +47,8 @@ services:
       - MONGO_HOST=mongodb://mongodb:27017/
       - MONGO_DB_NAME=aichatbot
       - CHROMA_DB_PATH=/app/chroma_db
+      - GOOGLE_OAUTH2_CLIENT_ID=YOUR_CLIENT_ID_HERE
+      - GOOGLE_OAUTH2_CLIENT_SECRET=YOUR_CLIENT_SECRET_HERE
     depends_on:
       - mongodb
       - chromadb
