@@ -258,9 +258,3 @@ If you have any questions, please create an issue on the GitLab repository.
 <!--New comment>
 <!--New comment>
 <!--New comment>
-<!--New comment>
-<!--New comment>
-<!--New comment>
-<!--New comment>
-<!--New comment>
-<!--New comment>
