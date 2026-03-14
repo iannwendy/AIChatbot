@@ -4,7 +4,7 @@ RAG Chain - Retrieval-Augmented Generation chain with LLM.
 import logging
 from typing import Dict, Any, Optional, List, Generator
 
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from django.conf import settings
 
 from .retriever import DocumentRetriever
@@ -27,17 +27,17 @@ class RAGChain:
     """RAG chain: retrieve context + call LLM."""
 
     def __init__(self, model: Optional[str] = None):
-        api_key = settings.OPENAI_API_KEY
+        api_key = settings.GEMINI_API_KEY
         if not api_key:
-            raise ValueError("OPENAI_API_KEY not configured")
+            raise ValueError("GEMINI_API_KEY not configured")
 
         self.model = model or LLM_MODEL
         self.retriever = DocumentRetriever(top_k=RETRIEVAL_TOP_K)
-        self.llm = ChatOpenAI(
+        self.llm = ChatGoogleGenerativeAI(
             model=self.model,
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
-            api_key=api_key,
+            google_api_key=api_key,
         )
         logger.info(f"RAGChain initialized with model: {self.model}")
 

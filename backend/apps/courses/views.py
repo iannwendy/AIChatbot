@@ -127,11 +127,11 @@ Trả về JSON array với format:
 ]"""
 
         # Call LLM
-        from langchain_openai import ChatOpenAI
+        from langchain_google_genai import ChatGoogleGenerativeAI
         from django.conf import settings
 
         try:
-            llm = ChatOpenAI(model='gpt-4o-mini', api_key=settings.OPENAI_API_KEY)
+            llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash', google_api_key=settings.GEMINI_API_KEY)
             response = llm.invoke([{"role": "user", "content": prompt}])
             content = response.content
 

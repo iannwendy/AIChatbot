@@ -154,8 +154,8 @@ CORS_ALLOW_CREDENTIALS = True
 GOOGLE_OAUTH2_CLIENT_ID = os.getenv('GOOGLE_OAUTH2_CLIENT_ID', '')
 GOOGLE_OAUTH2_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH2_CLIENT_SECRET', '')
 
-# OpenAI Settings
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+# Gemini Settings
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
 # ChromaDB Settings
 CHROMA_HOST = os.getenv('CHROMA_HOST', 'chromadb')

@@ -1,10 +1,10 @@
 """
-Embedding Service - OpenAI embeddings wrapper.
+Embedding Service - Google Gemini embeddings wrapper.
 """
 import logging
 from typing import List, Optional
 
-from langchain_openai import OpenAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from django.conf import settings
 
 from .config import EMBEDDING_MODEL
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    """Wrapper for OpenAI embeddings."""
+    """Wrapper for Google Gemini embeddings."""
 
     _instance = None
 
@@ -27,13 +27,13 @@ class EmbeddingService:
         if self._initialized:
             return
 
-        api_key = settings.OPENAI_API_KEY
+        api_key = settings.GEMINI_API_KEY
         if not api_key:
-            raise ValueError("OPENAI_API_KEY not configured in settings")
+            raise ValueError("GEMINI_API_KEY not configured in settings")
 
-        self.embeddings = OpenAIEmbeddings(
+        self.embeddings = GoogleGenerativeAIEmbeddings(
             model=EMBEDDING_MODEL,
-            api_key=api_key,
+            google_api_key=api_key,
         )
         self._initialized = True
         logger.info(f"EmbeddingService initialized with model: {EMBEDDING_MODEL}")

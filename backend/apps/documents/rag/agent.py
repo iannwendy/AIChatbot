@@ -5,7 +5,7 @@ Decides when to search documents vs query database.
 import logging
 from typing import Dict, Any, Optional, List, Generator
 
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from django.conf import settings
 
 from .tools import AVAILABLE_TOOLS, execute_tool
@@ -34,16 +34,16 @@ class RAGAgent:
     """Agent that uses tool calling to decide how to answer."""
 
     def __init__(self, model: Optional[str] = None):
-        api_key = settings.OPENAI_API_KEY
+        api_key = settings.GEMINI_API_KEY
         if not api_key:
-            raise ValueError("OPENAI_API_KEY not configured")
+            raise ValueError("GEMINI_API_KEY not configured")
 
         self.model = model or LLM_MODEL
-        self.llm = ChatOpenAI(
+        self.llm = ChatGoogleGenerativeAI(
             model=self.model,
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
-            api_key=api_key,
+            google_api_key=api_key,
         )
         self.retriever = DocumentRetriever(top_k=RETRIEVAL_TOP_K)
         logger.info(f"RAGAgent initialized with model: {self.model}")
