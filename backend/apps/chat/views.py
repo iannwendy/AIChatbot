@@ -4,11 +4,16 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.http import StreamingHttpResponse
 from django.db.models import Max
 from bson import ObjectId
 from datetime import datetime
 from .models import Course
 from .mongo_utils import get_collection
+from apps.documents.rag.chain import RAGChain
+from apps.documents.rag.agent import RAGAgent
+from apps.documents.services.config import AVAILABLE_MODELS, MEMORY_WINDOW_SIZE
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -165,9 +170,40 @@ class ChatSessionViewSet(viewsets.ViewSet):
         user_msg_result = get_collection('chat_messages').insert_one(user_message_data)
         user_message_data['_id'] = user_msg_result.inserted_id
 
-        # TODO: Implement RAG-based response (use LangChain + ChromaDB)
-        # For now, create an echo response
-        response_content = f"Echo: {content}\n\n(RAG response will be implemented)"
+        # Get course_id for retrieval
+        course_id = session.get('course_id')
+
+        # Get conversation history (last 10 messages)
+        recent_messages = list(
+            get_collection('chat_messages')
+            .find({'session_id': pk})
+            .sort('created_at', -1)
+            .limit(10)
+        )
+        conversation_history = [
+            {'role': m['message_type'], 'content': m['content']}
+            for m in reversed(recent_messages)
+            if m.get('message_type') in ('user', 'assistant')
+        ]
+
+        # Call RAG chain
+        model = request.data.get('model')
+        try:
+            rag_chain = RAGChain(model=model)
+            rag_result = rag_chain.invoke_with_history(
+                question=content,
+                course_id=course_id,
+                conversation_history=conversation_history[:-1],  # Exclude current question
+            )
+            response_content = rag_result['answer']
+            sources = rag_result['sources']
+        except Exception as e:
+            logger.error(f"RAG chain error: {e}")
+            response_content = "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi. Vui lòng thử lại."
+            sources = []
+
+        # Format sources for storage (extract source strings for frontend display)
+        source_labels = [s.get('source', '') for s in sources if s.get('source')]
 
         # Save assistant message to MongoDB
         assistant_message_data = {
@@ -175,7 +211,7 @@ class ChatSessionViewSet(viewsets.ViewSet):
             'user_id': request.user.id,
             'message_type': 'assistant',
             'content': response_content,
-            'sources': [],
+            'sources': source_labels,
             'created_at': datetime.utcnow(),
         }
         assistant_msg_result = get_collection('chat_messages').insert_one(assistant_message_data)
@@ -203,3 +239,139 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 'created_at': assistant_message_data['created_at'].isoformat(),
             }
         })
+
+    @action(detail=True, methods=['post'], url_path='send_message_stream')
+    def send_message_stream(self, request, pk=None):
+        """Stream chat response using Server-Sent Events"""
+        # Validate session
+        try:
+            session = get_collection('chat_sessions').find_one({
+                '_id': ObjectId(pk),
+                'user_id': request.user.id
+            })
+        except Exception:
+            return Response({'error': 'Invalid session ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not session:
+            return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        content = request.data.get('content', '')
+        if not content:
+            return Response(
+                {'error': 'Message content is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        model = request.data.get('model')
+
+        # Save user message to MongoDB
+        user_message_data = {
+            'session_id': pk,
+            'user_id': request.user.id,
+            'message_type': 'user',
+            'content': content,
+            'sources': [],
+            'created_at': datetime.utcnow(),
+        }
+        user_msg_result = get_collection('chat_messages').insert_one(user_message_data)
+        user_message_id = str(user_msg_result.inserted_id)
+
+        # Get course_id and conversation history
+        course_id = session.get('course_id')
+        recent_messages = list(
+            get_collection('chat_messages')
+            .find({'session_id': pk})
+            .sort('created_at', -1)
+            .limit(MEMORY_WINDOW_SIZE)
+        )
+        conversation_history = [
+            {'role': m['message_type'], 'content': m['content']}
+            for m in reversed(recent_messages)
+            if m.get('message_type') in ('user', 'assistant')
+        ]
+
+        def event_stream():
+            # Send start event with user message ID
+            yield f"data: {json.dumps({'type': 'start', 'user_message_id': user_message_id})}\n\n"
+
+            full_response = ""
+            sources = []
+
+            try:
+                use_agent = request.data.get('use_agent', True)
+
+                if use_agent:
+                    # Use Agent with tool calling
+                    agent = RAGAgent(model=model)
+                    agent_result = agent.invoke(
+                        question=content,
+                        course_id=course_id,
+                        course_name=session.get('course_name', ''),
+                        conversation_history=conversation_history[:-1],
+                    )
+                    full_response = agent_result['answer']
+                    sources = agent_result.get('sources', [])
+
+                    # Stream the response in chunks for SSE
+                    chunk_size = 10
+                    for i in range(0, len(full_response), chunk_size):
+                        chunk = full_response[i:i + chunk_size]
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+                else:
+                    # Use regular RAG chain with streaming
+                    rag_chain = RAGChain(model=model)
+
+                    retrieval = rag_chain.retriever.retrieve_with_context(
+                        query=content,
+                        course_id=course_id,
+                    )
+                    sources = retrieval.get('sources', [])
+
+                    for chunk in rag_chain.stream_with_history(
+                        question=content,
+                        course_id=course_id,
+                        conversation_history=conversation_history[:-1],
+                    ):
+                        full_response += chunk
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+
+            except Exception as e:
+                logger.error(f"Streaming RAG error: {e}")
+                error_msg = "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi."
+                full_response = error_msg
+                yield f"data: {json.dumps({'type': 'chunk', 'content': error_msg})}\n\n"
+
+            # Format sources for storage
+            source_labels = [s.get('source', '') for s in sources if s.get('source')]
+
+            # Save assistant message to MongoDB
+            assistant_message_data = {
+                'session_id': pk,
+                'user_id': request.user.id,
+                'message_type': 'assistant',
+                'content': full_response,
+                'sources': source_labels,
+                'created_at': datetime.utcnow(),
+            }
+            result = get_collection('chat_messages').insert_one(assistant_message_data)
+            assistant_message_id = str(result.inserted_id)
+
+            # Update session timestamp
+            get_collection('chat_sessions').update_one(
+                {'_id': ObjectId(pk)},
+                {'$set': {'updated_at': datetime.utcnow()}}
+            )
+
+            # Send sources and done event
+            yield f"data: {json.dumps({'type': 'sources', 'sources': source_labels})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'assistant_message_id': assistant_message_id})}\n\n"
+
+        response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+        response['X-Accel-Buffering'] = 'no'
+        response['Cache-Control'] = 'no-cache'
+        return response
+
+    @action(detail=False, methods=['get'])
+    def models(self, request):
+        """Get available LLM models"""
+        return Response(AVAILABLE_MODELS)

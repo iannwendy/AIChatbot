@@ -6,8 +6,12 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from .models import Document
 from .serializers import DocumentSerializer, DocumentUploadSerializer
+from .services.ingestion import IngestionPipeline
 from apps.courses.models import Course
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -63,18 +67,56 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def process(self, request, pk=None):
-        """Process document for RAG - placeholder"""
+        """Process document for RAG - parse, chunk, embed, store"""
         document = self.get_object()
 
-        # TODO: Implement document processing (chunking, embedding)
-        # For now, just mark as processed
-        document.is_processed = True
-        document.save()
+        if document.is_processed:
+            return Response({
+                'message': 'Document already processed',
+                'document_id': document.id,
+                'status': 'already_processed'
+            })
 
-        return Response({
-            'message': 'Document processed successfully',
-            'document_id': document.id
-        })
+        try:
+            pipeline = IngestionPipeline()
+            result = pipeline.process_document(document)
+
+            return Response({
+                'message': 'Document processed successfully',
+                'document_id': document.id,
+                'pages_extracted': result.get('pages_extracted', 0),
+                'chunks_created': result.get('chunks_created', 0),
+                'status': 'success'
+            })
+        except Exception as e:
+            logger.error(f"Document processing failed for {pk}: {e}")
+            return Response(
+                {'error': str(e), 'status': 'error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
+    def reprocess(self, request, pk=None):  # noqa: ARG001
+        """Reprocess a document (delete old chunks and re-embed)"""
+        document = self.get_object()
+
+        try:
+            pipeline = IngestionPipeline()
+            result = pipeline.process_document(document, force_reprocess=True)
+
+            return Response({
+                'message': 'Document reprocessed successfully',
+                'document_id': document.id,
+                'pages_extracted': result.get('pages_extracted', 0),
+                'chunks_created': result.get('chunks_created', 0),
+                'status': 'success'
+            })
+        except Exception as e:
+            logger.error(f"Document reprocessing failed for {pk}: {e}")
+            return Response(
+                {'error': str(e), 'status': 'error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['get'])
     def by_course(self, request):

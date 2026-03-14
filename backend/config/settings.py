@@ -158,6 +158,8 @@ GOOGLE_OAUTH2_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH2_CLIENT_SECRET', '')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
 # ChromaDB Settings
+CHROMA_HOST = os.getenv('CHROMA_HOST', 'chromadb')
+CHROMA_PORT = int(os.getenv('CHROMA_PORT', '8000'))
 CHROMA_DB_PATH = os.getenv('CHROMA_DB_PATH', '/app/chroma_db')
 
 # Social Auth Settings

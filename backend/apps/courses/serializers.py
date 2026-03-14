@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Course
+from .models import Course, Quiz, Question, QuizAttempt, ExamSchedule
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -48,3 +48,34 @@ class EnrollmentSerializer(serializers.Serializer):
         child=serializers.IntegerField(),
         required=True
     )
+
+
+class QuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Question
+        fields = ['id', 'question_text', 'options', 'correct_answer', 'explanation', 'order']
+
+
+class QuizSerializer(serializers.ModelSerializer):
+    questions = QuestionSerializer(many=True, read_only=True)
+    question_count = serializers.IntegerField(source='question_count', read_only=True)
+
+    class Meta:
+        model = Quiz
+        fields = ['id', 'title', 'description', 'topic', 'question_count', 'questions', 'created_at']
+
+
+class QuizAttemptSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student.get_full_name', read_only=True)
+
+    class Meta:
+        model = QuizAttempt
+        fields = ['id', 'student', 'student_name', 'score', 'total_questions', 'started_at', 'completed_at']
+
+
+class ExamScheduleSerializer(serializers.ModelSerializer):
+    exam_type_display = serializers.CharField(source='get_exam_type_display', read_only=True)
+
+    class Meta:
+        model = ExamSchedule
+        fields = ['id', 'exam_date', 'exam_type', 'exam_type_display', 'room', 'notes', 'created_at']
