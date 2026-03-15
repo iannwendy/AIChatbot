@@ -17,7 +17,8 @@ A Full-stack web application integrated with AI to help students answer question
 - MongoDB for main database
 - ChromaDB for Vector Database
 - LangChain for AI/LLM integration
-- OpenAI API for LLM
+- Google Gemini API for LLM and Embedding
+- rank_bm25 for keyword search
 
 ### Infrastructure
 
@@ -145,30 +146,41 @@ npm start
 - MongoDB database setup
 - ChromaDB vector database setup
 - Docker Compose configuration
-- Google OAuth authentication (placeholder)
-- User and course management (models created)
-- Document upload and management (models created)
-- Basic chat interface (UI created)
-- Chat history storage (models created)
+- Google OAuth authentication
+- User and course management
+- Document upload and management
+- Basic chat interface
+- Chat history storage
+- Admin dashboard with stats
+- Role-based access control (student/teacher/admin)
+- User import from Excel
 
-### Level 2: Basic RAG (Not Implemented)
+### Level 2: Basic RAG
 
-- Document processing (Parsing, Chunking)
-- Embedding and storage in Vector DB
+- Document processing (Parsing PDF, DOCX, TXT)
+- Text chunking with RecursiveCharacterTextSplitter
+- Embedding with Google Gemini embedding-001
+- Storage in ChromaDB vector database
 - RAG-based Q&A chat
-- Source citation
+- Source citation with metadata
+- BM25 keyword search
+- Hybrid search (vector + BM25 via Reciprocal Rank Fusion)
 
-### Level 3: Advanced (Not Implemented)
+### Level 3: Advanced
 
-- Streaming Response
-- Conversation context management
-- Model selection
+- Streaming Response (SSE real-time token-by-token)
+- Conversation context management (memory window)
+- Model selection (Gemini 2.0 Flash, 2.5 Flash, 2.5 Pro)
+- Admin stats dashboard
+- Teacher stats dashboard
 
-### Level 4: Advanced & Agent (Not Implemented)
+### Level 4: Advanced & Agent
 
-- Function Calling / Agent
-- Quiz generator
-- Hybrid Search
+- RAG Agent with tool calling (implemented, partially wired)
+- Quiz generator (LLM-powered from course documents)
+- Quiz submission and scoring with explanations
+- Exam schedule management
+- Hybrid Search (vector + BM25)
 
 ## Configuration
 
@@ -190,8 +202,8 @@ MONGO_PASSWORD=
 GOOGLE_OAUTH2_CLIENT_ID=your-google-client-id
 GOOGLE_OAUTH2_CLIENT_SECRET=your-google-client-secret
 
-# OpenAI
-OPENAI_API_KEY=your-openai-api-key
+# Google Gemini
+GOOGLE_API_KEY=your-google-api-key
 
 # ChromaDB
 CHROMA_DB_PATH=/app/chroma_db
@@ -202,30 +214,57 @@ CHROMA_DB_PATH=/app/chroma_db
 ### Authentication
 
 - POST /api/auth/google/ - Login with Google
+- POST /api/auth/admin-login/ - Admin login (dev)
+- GET /api/auth/current-user/ - Get current user
+- POST /api/auth/logout/ - Logout
+- PUT /api/auth/update-profile/ - Update user profile
+
+### Admin Stats
+
+- GET /api/auth/admin/stats/ - Admin dashboard stats
+- GET /api/auth/teacher/stats/ - Teacher dashboard stats
 
 ### Users
 
 - GET /api/users/ - List users
 - GET /api/users/students/ - List students
 - GET /api/users/teachers/ - List teachers
+- POST /api/users/import/ - Import users from Excel
 
 ### Courses
 
 - GET /api/courses/ - List courses
 - POST /api/courses/ - Create new course
 - GET /api/courses/{id}/ - Course details
+- PUT /api/courses/{id}/ - Update course
+- DELETE /api/courses/{id}/ - Delete course
+- POST /api/courses/{id}/enroll/ - Enroll students
+- POST /api/courses/{id}/unenroll/ - Unenroll students
+- POST /api/courses/{id}/import_students/ - Import students to course
+- POST /api/courses/{id}/generate_quiz/ - Generate quiz from course documents
+- POST /api/courses/{id}/submit_quiz/ - Submit quiz answers
+- GET /api/courses/{id}/exam_schedule/ - Get exam schedules
+- POST /api/courses/{id}/exam_schedule/ - Create exam schedule
 
 ### Documents
 
 - GET /api/documents/ - List documents
 - POST /api/documents/ - Upload document
+- GET /api/documents/{id}/ - Document details
+- DELETE /api/documents/{id}/ - Delete document
 - POST /api/documents/{id}/process/ - Process document for RAG
+- POST /api/documents/{id}/reprocess/ - Reprocess document
+- GET /api/documents/by_course/{course_id}/ - Documents by course
 
 ### Chat
 
 - GET /api/chat/sessions/ - List chat sessions
 - POST /api/chat/sessions/ - Create new chat session
-- POST /api/chat/sessions/{id}/send_message/ - Send message
+- GET /api/chat/sessions/{id}/ - Get chat session
+- DELETE /api/chat/sessions/{id}/ - Delete chat session
+- POST /api/chat/sessions/{id}/send_message/ - Send message (non-streaming)
+- POST /api/chat/sessions/{id}/send_message_stream/ - Send message (streaming SSE)
+- GET /api/chat/models/ - List available LLM models
 
 ## Testing
 
