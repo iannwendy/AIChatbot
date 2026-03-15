@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -6,6 +7,8 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.http import StreamingHttpResponse
 from django.db.models import Max
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from bson import ObjectId
 from datetime import datetime
 from .models import Course
@@ -20,8 +23,16 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    """Session authentication without CSRF enforcement for API endpoints."""
+    def enforce_csrf(self, request):
+        return  # Skip CSRF check
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class ChatSessionViewSet(viewsets.ViewSet):
     """Chat session management using MongoDB"""
+    authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [IsAuthenticated]
 
     def list(self, request):
@@ -46,23 +57,25 @@ class ChatSessionViewSet(viewsets.ViewSet):
 
     def create(self, request):
         """Create a new chat session"""
-        course_id = request.data.get('course_id')
+        course_id = request.data.get('course_id', 0)
         title = request.data.get('title', 'New Chat')
 
-        course = get_object_or_404(Course, id=course_id)
-
-        # Check if user is enrolled in the course
-        if request.user.role == 'student' and request.user not in course.students.all():
-            return Response(
-                {'error': 'You are not enrolled in this course'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        # Handle case where course_id is 0 or not provided (general chat)
+        course = None
+        if course_id and course_id != 0:
+            course = get_object_or_404(Course, id=course_id)
+            # Check if user is enrolled in the course
+            if request.user.role == 'student' and request.user not in course.students.all():
+                return Response(
+                    {'error': 'You are not enrolled in this course'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
         # Create session in MongoDB
         session_data = {
             'user_id': request.user.id,
-            'course_id': course_id,
-            'course_name': course.name,
+            'course_id': course_id if course_id != 0 else None,
+            'course_name': course.name if course else 'General Chat',
             'title': title,
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow(),
@@ -117,6 +130,39 @@ class ChatSessionViewSet(viewsets.ViewSet):
         }
 
         return Response(session_data)
+
+    def partial_update(self, request, pk=None):
+        """Update session (e.g., rename)"""
+        try:
+            session = get_collection('chat_sessions').find_one({
+                '_id': ObjectId(pk),
+                'user_id': request.user.id
+            })
+        except:
+            return Response({'error': 'Invalid session ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not session:
+            return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Update fields from request data
+        update_data = {}
+        if 'title' in request.data:
+            update_data['title'] = request.data['title']
+
+        if update_data:
+            update_data['updated_at'] = datetime.utcnow()
+            get_collection('chat_sessions').update_one(
+                {'_id': ObjectId(pk)},
+                {'$set': update_data}
+            )
+
+        # Return updated session
+        session = get_collection('chat_sessions').find_one({'_id': ObjectId(pk)})
+        return Response({
+            'id': str(session['_id']),
+            'title': session.get('title', 'New Chat'),
+            'updated_at': session.get('updated_at').isoformat() if session.get('updated_at') else None,
+        })
 
     def destroy(self, request, pk=None):
         """Delete a chat session"""
@@ -298,46 +344,27 @@ class ChatSessionViewSet(viewsets.ViewSet):
             sources = []
 
             try:
-                use_agent = request.data.get('use_agent', True)
+                # Use RAGChain with real streaming (more reliable)
+                rag_chain = RAGChain(model=model)
 
-                if use_agent:
-                    # Use Agent with tool calling
-                    agent = RAGAgent(model=model)
-                    agent_result = agent.invoke(
-                        question=content,
-                        course_id=course_id,
-                        course_name=session.get('course_name', ''),
-                        conversation_history=conversation_history[:-1],
-                    )
-                    full_response = agent_result['answer']
-                    sources = agent_result.get('sources', [])
+                retrieval = rag_chain.retriever.retrieve_with_context(
+                    query=content,
+                    course_id=course_id,
+                )
+                sources = retrieval.get('sources', [])
 
-                    # Stream the response in chunks for SSE
-                    chunk_size = 10
-                    for i in range(0, len(full_response), chunk_size):
-                        chunk = full_response[i:i + chunk_size]
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
-                else:
-                    # Use regular RAG chain with streaming
-                    rag_chain = RAGChain(model=model)
-
-                    retrieval = rag_chain.retriever.retrieve_with_context(
-                        query=content,
-                        course_id=course_id,
-                    )
-                    sources = retrieval.get('sources', [])
-
-                    for chunk in rag_chain.stream_with_history(
-                        question=content,
-                        course_id=course_id,
-                        conversation_history=conversation_history[:-1],
-                    ):
-                        full_response += chunk
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+                # Stream using real streaming from LLM
+                for chunk in rag_chain.stream_with_history(
+                    question=content,
+                    course_id=course_id,
+                    conversation_history=conversation_history[:-1],
+                ):
+                    full_response += chunk
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
 
             except Exception as e:
-                logger.error(f"Streaming RAG error: {e}")
-                error_msg = "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi."
+                logger.error(f"Streaming RAG error: {e}", exc_info=True)
+                error_msg = "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi. Vui lòng thử lại sau."
                 full_response = error_msg
                 yield f"data: {json.dumps({'type': 'chunk', 'content': error_msg})}\n\n"
 
@@ -355,6 +382,16 @@ class ChatSessionViewSet(viewsets.ViewSet):
             }
             result = get_collection('chat_messages').insert_one(assistant_message_data)
             assistant_message_id = str(result.inserted_id)
+
+            # Auto-generate title if this is first message
+            session = get_collection('chat_sessions').find_one({'_id': ObjectId(pk)})
+            if session and session.get('title', '').startswith('Cuộc trò chuyện mới'):
+                # Generate title from first user message
+                title = content[:50] + '...' if len(content) > 50 else content
+                get_collection('chat_sessions').update_one(
+                    {'_id': ObjectId(pk)},
+                    {'$set': {'title': title, 'updated_at': datetime.utcnow()}}
+                )
 
             # Update session timestamp
             get_collection('chat_sessions').update_one(

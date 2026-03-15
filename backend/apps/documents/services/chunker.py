@@ -4,7 +4,7 @@ Text Chunker - Split text into smaller chunks for embedding.
 import logging
 from typing import List, Dict, Any
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from .config import CHUNK_SIZE, CHUNK_OVERLAP
 

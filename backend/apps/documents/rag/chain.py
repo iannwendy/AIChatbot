@@ -12,15 +12,14 @@ from ..services.config import LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS, RETRIE
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Bạn là trợ lý giảng dạy AI cho một nền tảng giáo dục.
-Nhiệm vụ của bạn là trả lời câu hỏi của sinh viên dựa trên tài liệu khóa học được cung cấp.
+SYSTEM_PROMPT = """Bạn là trợ lý AI thông minh cho một nền tảng giáo dục.
+Nhiệm vụ của bạn là hỗ trợ sinh viên trong học tập.
 
 Quy tắc:
-1. CHỈ trả lời dựa trên nội dung tài liệu được cung cấp trong phần Context.
-2. Nếu câu trả lời KHÔNG có trong tài liệu, hãy nói rõ: "Thông tin này không có trong tài liệu khóa học."
-3. Trích dẫn nguồn bằng cách sử dụng [1], [2], v.v. tương ứng với các đoạn context được đánh số.
-4. Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu.
-5. Cuối câu trả lời, liệt kê các nguồn tham khảo đã sử dụng."""
+1. Nếu có tài liệu khóa học được cung cấp trong phần Context, ưu tiên trả lời dựa trên tài liệu đó và trích dẫn nguồn [1], [2].
+2. Nếu không có tài liệu, hãy trả lời dựa trên kiến thức chung của bạn.
+3. Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu.
+4. Luôn thân thiện và hữu ích."""
 
 
 class RAGChain:
@@ -38,6 +37,7 @@ class RAGChain:
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
             google_api_key=api_key,
+            thinking_budget=0,  # Disable thinking for real-time streaming
         )
         logger.info(f"RAGChain initialized with model: {self.model}")
 
@@ -68,17 +68,14 @@ class RAGChain:
             top_k=top_k,
         )
 
-        # Build messages
+        # Build messages - always try to answer
         if retrieval['has_results']:
             user_content = (
                 f"Context từ tài liệu khóa học:\n{retrieval['context']}\n\n"
                 f"Câu hỏi: {question}"
             )
         else:
-            user_content = (
-                f"Không tìm thấy tài liệu liên quan đến câu hỏi này.\n"
-                f"Câu hỏi: {question}"
-            )
+            user_content = f"Câu hỏi: {question}"
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},

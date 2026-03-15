@@ -26,6 +26,13 @@ class UserViewSet(viewsets.ModelViewSet):
             return [IsAdminUser()]
         return [IsAuthenticated()]
 
+    def get_queryset(self):
+        queryset = User.objects.all()
+        role = self.request.query_params.get('role')
+        if role:
+            queryset = queryset.filter(role=role)
+        return queryset.order_by('-date_joined')
+
     @action(detail=False, methods=['get'])
     def me(self, request):
         """Get current user info"""
@@ -34,23 +41,23 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def students(self, request):
-        """Get all students"""
-        students = Student.objects.select_related('user').all()
-        serializer = StudentSerializer(students, many=True)
+        """Get all students (from User model by role)"""
+        students = User.objects.filter(role='student').order_by('-date_joined')
+        serializer = self.get_serializer(students, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def teachers(self, request):
-        """Get all teachers"""
-        teachers = Teacher.objects.select_related('user').all()
-        serializer = TeacherSerializer(teachers, many=True)
+        """Get all teachers (from User model by role)"""
+        teachers = User.objects.filter(role='teacher').order_by('-date_joined')
+        serializer = self.get_serializer(teachers, many=True)
         return Response(serializer.data)
 
 
 class StudentViewSet(viewsets.ModelViewSet):
-    """Student management"""
-    queryset = Student.objects.select_related('user').all()
-    serializer_class = StudentSerializer
+    """Student management - queries User model by role"""
+    queryset = User.objects.filter(role='student').order_by('-date_joined')
+    serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
@@ -62,7 +69,6 @@ class StudentViewSet(viewsets.ModelViewSet):
         """Create student with user account"""
         data = request.data
         with transaction.atomic():
-            # Create or get user
             user_data = {
                 'username': data.get('email', '').split('@')[0],
                 'email': data.get('email'),
@@ -74,24 +80,25 @@ class StudentViewSet(viewsets.ModelViewSet):
                 email=user_data['email'],
                 defaults=user_data
             )
+            if not created:
+                user.role = 'student'
+                user.save()
 
-            # Create student profile
-            student, created = Student.objects.get_or_create(
-                user=user,
-                defaults={'student_id': data.get('student_id', '')}
-            )
-            if not created and data.get('student_id'):
-                student.student_id = data.get('student_id')
-                student.save()
+            # Also create student profile if student_id provided
+            if data.get('student_id'):
+                Student.objects.get_or_create(
+                    user=user,
+                    defaults={'student_id': data.get('student_id', '')}
+                )
 
-        serializer = self.get_serializer(student)
+        serializer = self.get_serializer(user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class TeacherViewSet(viewsets.ModelViewSet):
-    """Teacher management"""
-    queryset = Teacher.objects.select_related('user').all()
-    serializer_class = TeacherSerializer
+    """Teacher management - queries User model by role"""
+    queryset = User.objects.filter(role='teacher').order_by('-date_joined')
+    serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
@@ -103,7 +110,6 @@ class TeacherViewSet(viewsets.ModelViewSet):
         """Create teacher with user account"""
         data = request.data
         with transaction.atomic():
-            # Create or get user
             user_data = {
                 'username': data.get('email', '').split('@')[0],
                 'email': data.get('email'),
@@ -115,17 +121,18 @@ class TeacherViewSet(viewsets.ModelViewSet):
                 email=user_data['email'],
                 defaults=user_data
             )
+            if not created:
+                user.role = 'teacher'
+                user.save()
 
-            # Create teacher profile
-            teacher, created = Teacher.objects.get_or_create(
-                user=user,
-                defaults={'teacher_id': data.get('teacher_id', '')}
-            )
-            if not created and data.get('teacher_id'):
-                teacher.teacher_id = data.get('teacher_id')
-                teacher.save()
+            # Also create teacher profile if teacher_id provided
+            if data.get('teacher_id'):
+                Teacher.objects.get_or_create(
+                    user=user,
+                    defaults={'teacher_id': data.get('teacher_id', '')}
+                )
 
-        serializer = self.get_serializer(teacher)
+        serializer = self.get_serializer(user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 

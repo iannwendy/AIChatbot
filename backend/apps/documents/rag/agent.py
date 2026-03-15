@@ -14,20 +14,14 @@ from ..services.config import LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS, RETRIE
 
 logger = logging.getLogger(__name__)
 
-AGENT_SYSTEM_PROMPT = """Bạn là trợ lý giảng dạy AI cho một nền tảng giáo dục.
-
-Bạn có các công cụ (tools) sau:
-- search_documents: Tìm kiếm trong tài liệu khóa học
-- get_exam_schedule: Lấy lịch thi
-- get_course_info: Lấy thông tin môn học
+GENERAL_SYSTEM_PROMPT = """Bạn là trợ lý AI thông minh cho một nền tảng giáo dục.
+Nhiệm vụ của bạn là hỗ trợ sinh viên trong học tập.
 
 Quy tắc:
-1. Nếu câu hỏi về kiến thức, lý thuyết → dùng search_documents
-2. Nếu hỏi về lịch thi, ngày thi → dùng get_exam_schedule
-3. Nếu hỏi thông tin chung về môn → dùng get_course_info
-4. CHỈ trả lời dựa trên kết quả từ tools. Nếu không tìm thấy, nói rõ.
-5. Trích dẫn nguồn [1], [2] khi dùng search_documents.
-6. Trả lời bằng tiếng Việt."""
+1. Nếu có tài liệu khóa học được cung cấp, ưu tiên trả lời dựa trên tài liệu đó.
+2. Nếu không có tài liệu, hãy trả lời dựa trên kiến thức chung của bạn.
+3. Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu.
+4. Luôn thân thiện và hữu ích."""
 
 
 class RAGAgent:
@@ -44,6 +38,7 @@ class RAGAgent:
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
             google_api_key=api_key,
+            thinking_budget=0,
         )
         self.retriever = DocumentRetriever(top_k=RETRIEVAL_TOP_K)
         logger.info(f"RAGAgent initialized with model: {self.model}")
@@ -51,7 +46,7 @@ class RAGAgent:
     def invoke(
         self,
         question: str,
-        course_id: int,
+        course_id: Optional[int] = None,
         course_name: str = "",
         conversation_history: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
@@ -61,8 +56,12 @@ class RAGAgent:
         Returns:
             Dict with 'answer', 'sources', 'tool_used'
         """
+        # If no course_id, skip tool calling and use direct RAG
+        if not course_id:
+            return self._fallback_rag(question, course_id)
+
         # Build messages
-        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": GENERAL_SYSTEM_PROMPT}]
 
         # Add conversation history
         for msg in (conversation_history or []):
@@ -77,17 +76,15 @@ class RAGAgent:
             response = self.llm.invoke(
                 messages,
                 tools=AVAILABLE_TOOLS,
-                tool_choice="auto",
             )
         except Exception as e:
             logger.error(f"Agent LLM call failed: {e}")
-            # Fallback to regular RAG
             return self._fallback_rag(question, course_id)
 
         # Step 2: Check if LLM wants to call a tool
         if hasattr(response, 'tool_calls') and response.tool_calls:
             tool_call = response.tool_calls[0]
-            tool_name = tool_call['name']
+            tool_name = tool_call.get('name', '')
             tool_args = tool_call.get('args', {})
 
             logger.info(f"Agent calling tool: {tool_name} with args: {tool_args}")
@@ -95,20 +92,20 @@ class RAGAgent:
             # Execute the tool
             tool_result = execute_tool(tool_name, tool_args, course_id, course_name)
 
-            # Step 3: Send tool result back to LLM for final answer
-            messages.append({"role": "assistant", "content": "", "tool_calls": [tool_call]})
-            messages.append({
-                "role": "tool",
-                "content": tool_result,
-                "tool_call_id": tool_call.get('id', 'call_1'),
-            })
-
+            # Step 3: Build a new prompt with tool result for final answer
+            final_prompt = (
+                f"Kết quả từ tool '{tool_name}':\n{tool_result}\n\n"
+                f"Dựa trên kết quả trên, hãy trả lời câu hỏi: {question}"
+            )
             try:
-                final_response = self.llm.invoke(messages)
+                final_response = self.llm.invoke([
+                    {"role": "system", "content": GENERAL_SYSTEM_PROMPT},
+                    {"role": "user", "content": final_prompt},
+                ])
                 answer = final_response.content
             except Exception as e:
                 logger.error(f"Agent final LLM call failed: {e}")
-                answer = tool_result  # Use raw tool result as fallback
+                answer = tool_result
 
             # Extract sources if search_documents was used
             sources = []
@@ -135,7 +132,7 @@ class RAGAgent:
     def stream(
         self,
         question: str,
-        course_id: int,
+        course_id: Optional[int] = None,
         course_name: str = "",
         conversation_history: Optional[List[Dict]] = None,
     ) -> Generator[str, None, None]:
@@ -150,35 +147,34 @@ class RAGAgent:
         for i in range(0, len(answer), chunk_size):
             yield answer[i:i + chunk_size]
 
-    def _fallback_rag(self, question: str, course_id: int) -> Dict[str, Any]:
+    def _fallback_rag(self, question: str, course_id: Optional[int] = None) -> Dict[str, Any]:
         """Fallback to regular RAG search when agent fails."""
         retrieval = self.retriever.retrieve_with_context(
             query=question,
             course_id=course_id,
         )
 
-        if not retrieval['has_results']:
-            return {
-                'answer': 'Không tìm thấy thông tin liên quan trong tài liệu.',
-                'sources': [],
-                'tool_used': 'search_documents',
-            }
-
-        # Build simple prompt
-        prompt = (
-            f"Dựa trên tài liệu:\n{retrieval['context']}\n\n"
-            f"Trả lời câu hỏi: {question}"
-        )
+        # Always try to answer - even without documents
+        if retrieval['has_results']:
+            prompt = (
+                f"Dựa trên tài liệu:\n{retrieval['context']}\n\n"
+                f"Trả lời câu hỏi: {question}"
+            )
+            sources = retrieval['sources']
+        else:
+            # No documents - answer from general knowledge
+            prompt = f"Câu hỏi: {question}"
+            sources = []
 
         try:
             response = self.llm.invoke([
-                {"role": "system", "content": AGENT_SYSTEM_PROMPT},
+                {"role": "system", "content": GENERAL_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ])
             return {
                 'answer': response.content,
-                'sources': retrieval['sources'],
-                'tool_used': 'search_documents',
+                'sources': sources,
+                'tool_used': 'search_documents' if retrieval['has_results'] else None,
             }
         except Exception as e:
             logger.error(f"Fallback RAG failed: {e}")
