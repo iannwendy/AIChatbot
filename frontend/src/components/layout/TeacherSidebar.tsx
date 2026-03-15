@@ -44,7 +44,7 @@ const TeacherSidebar: React.FC = () => {
       {/* Logo */}
       <div className={`p-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
         <div className="flex items-center gap-3">
-          <img src="/tdtu-logo.png" alt="TDTU" className="w-10 h-10 object-contain" />
+          <img src="/logo_2.png" alt="TDTU" className="w-10 h-10 object-contain" />
           <div>
             <div className="font-semibold text-lg">Giáo viên</div>
             <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>AI Chatbot</div>

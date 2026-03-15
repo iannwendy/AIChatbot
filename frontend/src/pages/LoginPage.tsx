@@ -73,7 +73,7 @@ const LoginPage: React.FC = () => {
       <div className="w-full max-w-sm text-center">
         {/* Logo */}
         <div className="mb-8">
-          <img src="/tdtu-logo.png" alt="TDTU" className="w-24 h-24 mx-auto mb-6 object-contain" />
+          <img src="/logo_2.png" alt="TDTU" className="w-24 h-24 mx-auto mb-6 object-contain" />
           <h1 className="text-2xl font-medium text-gray-900 mb-2">
             AI Assistant
           </h1>

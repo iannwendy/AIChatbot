@@ -386,7 +386,7 @@ const ChatPage: React.FC = () => {
                       </span>
                     )
                   ) : (
-                    <img src="/tdtu-logo.png" alt="AI" className="w-5 h-5 object-contain" />
+                    <img src="/logo_2.png" alt="AI" className="w-5 h-5 object-contain" />
                   )}
                 </div>
 
@@ -428,7 +428,7 @@ const ChatPage: React.FC = () => {
             {isStreaming && messages[messages.length - 1]?.type === 'user' && (
               <div className="flex gap-3">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                  <img src="/tdtu-logo.png" alt="AI" className="w-5 h-5 object-contain" />
+                  <img src="/logo_2.png" alt="AI" className="w-5 h-5 object-contain" />
                 </div>
                 <div className="flex-1">
                   <ShimmerLoader />

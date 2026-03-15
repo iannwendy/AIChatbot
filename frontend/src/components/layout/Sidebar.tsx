@@ -193,7 +193,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => navigate('/chat')}
           className="flex items-center gap-3 mb-3 cursor-pointer hover:opacity-80 transition-opacity"
         >
-          <img src="/tdtu-logo.png" alt="TDTU" className="w-10 h-10 object-contain" />
+          <img src="/logo_2.png" alt="TDTU" className="w-10 h-10 object-contain" />
           <span className="font-medium text-base">AI Assistant</span>
         </div>
         <button
