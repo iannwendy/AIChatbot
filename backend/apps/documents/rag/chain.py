@@ -12,14 +12,25 @@ from ..services.config import LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS, RETRIE
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Bạn là trợ lý AI thông minh cho một nền tảng giáo dục.
-Nhiệm vụ của bạn là hỗ trợ sinh viên trong học tập.
+SYSTEM_PROMPT = """Bạn là trợ lý AI hỗ trợ sinh viên đại học trong học tập.
 
-Quy tắc:
-1. Nếu có tài liệu khóa học được cung cấp trong phần Context, ưu tiên trả lời dựa trên tài liệu đó và trích dẫn nguồn [1], [2].
-2. Nếu không có tài liệu, hãy trả lời dựa trên kiến thức chung của bạn.
-3. Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu.
-4. Luôn thân thiện và hữu ích."""
+QUY TẮC BẮT BUỘC:
+
+1. KHI CÓ TÀI LIỆU (Context được cung cấp):
+   - Trả lời DỰA TRÊN tài liệu, trích dẫn nguồn bằng [1], [2], [3]...
+   - Nếu câu hỏi liên quan đến môn học nhưng KHÔNG TÌM THẤY trong tài liệu:
+     → Nói rõ: "Thông tin này không có trong tài liệu môn học được cung cấp."
+     → KHÔNG được tự suy luận, bịa đặt, hoặc trả lời dựa trên kiến thức bên ngoài cho câu hỏi về nội dung môn học.
+   - Cuối câu trả lời, ghi rõ nguồn: "Nguồn: [1] Tên tài liệu - Trang X"
+
+2. KHI KHÔNG CÓ TÀI LIỆU (câu hỏi chung chung, không liên quan môn học):
+   - Trả lời bình thường dựa trên kiến thức chung.
+   - Không cần trích dẫn nguồn.
+
+3. PHONG CÁCH:
+   - Trả lời bằng tiếng Việt, rõ ràng, ngắn gọn.
+   - Thân thiện, dễ hiểu.
+   - Sử dụng markdown khi cần (danh sách, bảng, code block)."""
 
 
 class RAGChain:
@@ -37,7 +48,7 @@ class RAGChain:
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
             google_api_key=api_key,
-            thinking_budget=0,  # Disable thinking for real-time streaming
+            timeout=60,
         )
         logger.info(f"RAGChain initialized with model: {self.model}")
 
@@ -155,6 +166,48 @@ class RAGChain:
             'sources': retrieval['sources'],
             'has_context': retrieval['has_results'],
         }
+
+    def stream_with_context(
+        self,
+        question: str,
+        context: str = '',
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Generator[str, None, None]:
+        """
+        Stream LLM response with pre-retrieved context. No retrieval done here.
+
+        Args:
+            question: User question
+            context: Pre-retrieved context string
+            conversation_history: Previous messages
+
+        Yields:
+            str: Token chunks
+        """
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+        if context:
+            messages.append({
+                "role": "system",
+                "content": f"Context tài liệu:\n{context}"
+            })
+
+        for msg in (conversation_history or []):
+            role = msg.get('role', 'user')
+            if role in ('user', 'assistant'):
+                messages.append({"role": role, "content": msg.get('content', '')})
+
+        messages.append({"role": "user", "content": question})
+
+        try:
+            for chunk in self.llm.stream(messages):
+                if chunk.content:
+                    yield chunk.content
+        except Exception as e:
+            logger.error(f"LLM stream failed: {e}", exc_info=True)
+            error_msg = "Xin lỗi, đã xảy ra lỗi khi tạo câu trả lời. Vui lòng thử lại."
+            # Yield error message through SSE so frontend can display it
+            yield error_msg
 
     def stream_with_history(
         self,

@@ -62,6 +62,15 @@ class DocumentViewSet(viewsets.ModelViewSet):
             uploaded_by=request.user
         )
 
+        # Auto-process document for RAG
+        try:
+            pipeline = IngestionPipeline()
+            result = pipeline.process_document(document)
+            logger.info(f"Auto-processed document {document.id}: {result.get('chunks_created', 0)} chunks created")
+        except Exception as e:
+            logger.warning(f"Auto-processing failed for document {document.id}: {e}")
+            # Document is still saved, processing can be done manually later
+
         response_serializer = DocumentSerializer(document, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 

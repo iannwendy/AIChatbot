@@ -8,19 +8,24 @@ User = get_user_model()
 class CourseSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(source='teacher.get_full_name', read_only=True)
     student_count = serializers.SerializerMethodField()
+    document_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
         fields = ['id', 'name', 'code', 'description', 'teacher', 'teacher_name',
-                  'students', 'student_count', 'created_at', 'updated_at']
+                  'students', 'student_count', 'document_count', 'created_at', 'updated_at']
         read_only_fields = ['created_at', 'updated_at']
 
     def get_student_count(self, obj):
         return obj.students.count()
 
+    def get_document_count(self, obj):
+        return obj.documents.count()
+
 
 class CourseCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating courses"""
+    teacher_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     student_ids = serializers.ListField(
         child=serializers.IntegerField(),
         write_only=True,
@@ -29,10 +34,18 @@ class CourseCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Course
-        fields = ['name', 'code', 'description', 'teacher', 'student_ids']
+        fields = ['name', 'code', 'description', 'teacher', 'teacher_id', 'student_ids']
+        extra_kwargs = {'teacher': {'required': False, 'allow_null': True}}
 
     def create(self, validated_data):
+        teacher_id = validated_data.pop('teacher_id', None)
         student_ids = validated_data.pop('student_ids', [])
+
+        if teacher_id and teacher_id > 0:
+            validated_data['teacher'] = User.objects.filter(id=teacher_id).first()
+        elif 'teacher' not in validated_data:
+            validated_data['teacher'] = None
+
         course = Course.objects.create(**validated_data)
 
         if student_ids:

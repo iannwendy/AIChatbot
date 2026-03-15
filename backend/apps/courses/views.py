@@ -1,9 +1,11 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils import timezone
+from config.authentication import AdminRolePermission, AdminOrTeacherPermission
 from .models import Course, Quiz, Question, QuizAttempt, ExamSchedule
 from .serializers import (
     CourseSerializer, CourseCreateSerializer, EnrollmentSerializer,
@@ -14,6 +16,7 @@ from apps.documents.rag.retriever import DocumentRetriever
 
 import json
 import logging
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +25,15 @@ User = get_user_model()
 
 class CourseViewSet(viewsets.ModelViewSet):
     """Course management"""
-    queryset = Course.objects.select_related('teacher').prefetch_related('students').all()
+    queryset = Course.objects.select_related('teacher').prefetch_related('students', 'documents').all()
     serializer_class = CourseSerializer
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
         if self.action in ['create', 'destroy', 'update', 'partial_update']:
-            return [IsAdminUser()]
+            return [AdminRolePermission()]
+        if self.action == 'import_students':
+            return [AdminOrTeacherPermission()]
         return [IsAuthenticated()]
 
     def get_serializer_class(self):
@@ -75,16 +80,98 @@ class CourseViewSet(viewsets.ModelViewSet):
             'student_count': course.students.count()
         })
 
+    @action(detail=True, methods=['post'], url_path='import-students')
+    def import_students(self, request, pk=None):
+        """Import students from CSV/Excel file to course"""
+        course = self.get_object()
+
+        # Teacher can only import to their own courses
+        if request.user.role == 'teacher' and course.teacher_id != request.user.id:
+            return Response(
+                {'error': 'Bạn không có quyền thêm sinh viên vào môn học này'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if file.name.endswith('.csv'):
+                df = pd.read_csv(file)
+            else:
+                df = pd.read_excel(file)
+        except Exception as e:
+            return Response({'error': f'Invalid file format: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        required_columns = ['email']
+        missing = [col for col in required_columns if col not in df.columns]
+        if missing:
+            return Response({
+                'error': f'Missing required columns: {missing}',
+                'required': required_columns
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        created_count = 0
+        existing_count = 0
+        errors = []
+
+        with transaction.atomic():
+            for idx, row in df.iterrows():
+                try:
+                    email = str(row['email']).strip()
+                    if not email or email == 'nan':
+                        errors.append(f"Row {idx + 2}: Invalid email")
+                        continue
+
+                    username = email.split('@')[0]
+                    user, user_created = User.objects.get_or_create(
+                        email=email,
+                        defaults={
+                            'username': username,
+                            'role': 'student',
+                            'first_name': str(row.get('first_name', '')).strip() if pd.notna(row.get('first_name')) else '',
+                            'last_name': str(row.get('last_name', '')).strip() if pd.notna(row.get('last_name')) else '',
+                        }
+                    )
+
+                    if not user_created and user.role != 'student':
+                        user.role = 'student'
+                        user.save()
+
+                    if pd.notna(row.get('student_id')):
+                        Student.objects.get_or_create(
+                            user=user,
+                            defaults={'student_id': str(row['student_id']).strip()}
+                        )
+
+                    if not course.students.filter(id=user.id).exists():
+                        course.students.add(user)
+                        created_count += 1
+                    else:
+                        existing_count += 1
+
+                except Exception as e:
+                    errors.append(f"Row {idx + 2}: {str(e)}")
+
+        return Response({
+            'message': f'Đã thêm {created_count} sinh viên vào môn học',
+            'existing': existing_count,
+            'errors': errors[:10] if errors else [],
+            'total_added': created_count,
+            'student_count': course.students.count()
+        })
+
     @action(detail=False, methods=['get'])
     def my_courses(self, request):
         """Get courses for current user"""
         user = request.user
         if user.role == 'student':
-            courses = Course.objects.filter(students=user)
+            courses = Course.objects.filter(students=user).select_related('teacher')
         elif user.role == 'teacher':
-            courses = Course.objects.filter(teacher=user)
+            courses = Course.objects.filter(teacher=user).select_related('teacher')
         else:
-            courses = Course.objects.all()
+            courses = Course.objects.select_related('teacher').all()
 
         serializer = CourseSerializer(courses, many=True)
         return Response(serializer.data)

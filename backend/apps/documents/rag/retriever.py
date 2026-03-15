@@ -31,9 +31,9 @@ class DocumentRetriever:
 
         filter_criteria = {}
         if course_id is not None:
-            filter_criteria['course_id'] = str(course_id)
+            filter_criteria['course_id'] = int(course_id)
         if document_id is not None:
-            filter_criteria['document_id'] = str(document_id)
+            filter_criteria['document_id'] = int(document_id)
 
         if not filter_criteria:
             filter_criteria = None
@@ -66,7 +66,7 @@ class DocumentRetriever:
         vector_results = self.vector_store.similarity_search(
             query=query,
             k=fetch_k,
-            filter_criteria={'course_id': str(course_id)},
+            filter_criteria={'course_id': int(course_id)},
         )
 
         # BM25 keyword search
@@ -164,13 +164,20 @@ class DocumentRetriever:
 
         for i, result in enumerate(results, 1):
             meta = result['metadata']
-            context_parts.append(f"[{i}] {result['text']}\nNguồn: {meta.get('source', 'Unknown')}")
+            # Format a more readable source citation
+            doc_title = meta.get('document_title', 'Unknown')
+            page_num = meta.get('page_number')
+            source_str = doc_title
+            if page_num:
+                source_str = f"{doc_title} - Trang {page_num}"
+
+            context_parts.append(f"[{i}] {result['text']}\nNguồn: {source_str}")
 
             sources.append({
                 'document_id': meta.get('document_id'),
-                'document_title': meta.get('document_title'),
-                'page_number': meta.get('page_number'),
-                'source': meta.get('source', ''),
+                'document_title': doc_title,
+                'page_number': page_num,
+                'source': source_str,
                 'relevance_score': result['score'],
             })
 

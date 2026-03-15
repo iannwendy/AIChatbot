@@ -9,7 +9,7 @@ class Course(models.Model):
     name = models.CharField(max_length=200)
     code = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True)
-    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='taught_courses')
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='taught_courses', null=True, blank=True)
     students = models.ManyToManyField(User, related_name='enrolled_courses', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

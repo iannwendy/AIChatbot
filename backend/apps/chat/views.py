@@ -338,6 +338,7 @@ class ChatSessionViewSet(viewsets.ViewSet):
 
         def event_stream():
             # Send start event with user message ID
+            logger.info(f"[Stream] Starting event stream for session {pk}, question: {content[:50]}")
             yield f"data: {json.dumps({'type': 'start', 'user_message_id': user_message_id})}\n\n"
 
             full_response = ""
@@ -345,22 +346,29 @@ class ChatSessionViewSet(viewsets.ViewSet):
 
             try:
                 # Use RAGChain with real streaming (more reliable)
+                logger.info(f"[Stream] Initializing RAGChain with model: {model}")
                 rag_chain = RAGChain(model=model)
 
+                logger.info(f"[Stream] Retrieving context for course_id: {course_id}")
                 retrieval = rag_chain.retriever.retrieve_with_context(
                     query=content,
                     course_id=course_id,
                 )
                 sources = retrieval.get('sources', [])
+                context = retrieval.get('context', '')
+                logger.info(f"[Stream] Retrieved {len(sources)} sources, has_results: {retrieval.get('has_results')}")
 
-                # Stream using real streaming from LLM
-                for chunk in rag_chain.stream_with_history(
+                # Stream using pre-retrieved context (no double retrieval)
+                logger.info(f"[Stream] Starting LLM streaming...")
+                for chunk in rag_chain.stream_with_context(
                     question=content,
-                    course_id=course_id,
+                    context=context,
                     conversation_history=conversation_history[:-1],
                 ):
                     full_response += chunk
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+
+                logger.info(f"[Stream] LLM streaming complete. Response length: {len(full_response)}")
 
             except Exception as e:
                 logger.error(f"Streaming RAG error: {e}", exc_info=True)
@@ -368,8 +376,18 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 full_response = error_msg
                 yield f"data: {json.dumps({'type': 'chunk', 'content': error_msg})}\n\n"
 
-            # Format sources for storage
+            # Format sources for storage - keep full source objects for frontend
             source_labels = [s.get('source', '') for s in sources if s.get('source')]
+
+            # Also send full source objects in SSE for better frontend display
+            sources_for_frontend = [
+                {
+                    'document_title': s.get('document_title', ''),
+                    'page_number': s.get('page_number'),
+                    'source': s.get('source', ''),
+                }
+                for s in sources if s.get('source')
+            ]
 
             # Save assistant message to MongoDB
             assistant_message_data = {
@@ -377,6 +395,7 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 'user_id': request.user.id,
                 'message_type': 'assistant',
                 'content': full_response,
+                'sources': source_labels,
                 'sources': source_labels,
                 'created_at': datetime.utcnow(),
             }
@@ -399,8 +418,8 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 {'$set': {'updated_at': datetime.utcnow()}}
             )
 
-            # Send sources and done event
-            yield f"data: {json.dumps({'type': 'sources', 'sources': source_labels})}\n\n"
+            # Send sources and done event - use full source objects for better frontend display
+            yield f"data: {json.dumps({'type': 'sources', 'sources': sources_for_frontend})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'assistant_message_id': assistant_message_id})}\n\n"
 
         response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')

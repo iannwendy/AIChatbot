@@ -1,5 +1,5 @@
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -162,8 +162,12 @@ def google_callback(request):
         return redirect("http://localhost:3000/login?error=auth_failed")
 
 
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def admin_login(request):
     """Hardcoded admin login for development"""
     username = request.data.get('username')
@@ -174,8 +178,8 @@ def admin_login(request):
             username='admin',
             defaults={'role': 'admin', 'is_staff': True, 'is_superuser': True}
         )
-        # Ensure admin role is set
-        if user.role != 'admin':
+        # Always ensure admin privileges are set
+        if not user.is_staff or not user.is_superuser or user.role != 'admin':
             user.role = 'admin'
             user.is_staff = True
             user.is_superuser = True

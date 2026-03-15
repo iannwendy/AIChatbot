@@ -1,9 +1,10 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from config.authentication import AdminRolePermission
 from .models import Student, Teacher
 from .serializers import (
     UserSerializer, StudentSerializer, TeacherSerializer,
@@ -23,7 +24,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'destroy', 'update', 'partial_update']:
-            return [IsAdminUser()]
+            return [AdminRolePermission()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -62,7 +63,7 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'destroy', 'update', 'partial_update']:
-            return [IsAdminUser()]
+            return [AdminRolePermission()]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -103,7 +104,7 @@ class TeacherViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'destroy', 'update', 'partial_update']:
-            return [IsAdminUser()]
+            return [AdminRolePermission()]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -138,7 +139,7 @@ class TeacherViewSet(viewsets.ModelViewSet):
 
 class ImportViewSet(viewsets.ViewSet):
     """Import students/teachers from Excel"""
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, AdminRolePermission]
 
     @action(detail=False, methods=['post'], url_path='students')
     def import_students(self, request):
