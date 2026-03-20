@@ -461,11 +461,13 @@ import {
   HiChevronDown,
   HiChevronUp,
   HiOutlineBookOpen,
+  HiQuestionMarkCircle,
 } from "react-icons/hi2";
 import WelcomeScreen from "../components/chat/WelcomeScreen";
 import ShimmerLoader from "../components/chat/ShimmerLoader";
 import SourceCitation from "../components/chat/SourceCitation";
 import ChatInput from "../components/chat/ChatInput";
+import QuizInChat from "../components/chat/QuizInChat";
 import { chatAPI, coursesAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -519,6 +521,7 @@ const ChatPage: React.FC = () => {
     { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
   ]);
   const [courseInfo, setCourseInfo] = useState<CourseInfo | null>(null);
+  const [showQuizPanel, setShowQuizPanel] = useState(false);
 
   // Load course info from session data or URL params
   useEffect(() => {
@@ -865,6 +868,21 @@ const ChatPage: React.FC = () => {
               &middot; GV: {courseInfo.teacher_name}
             </span>
           )}
+          <div className="ml-auto">
+            <button
+              onClick={() => setShowQuizPanel(!showQuizPanel)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                showQuizPanel
+                  ? "bg-blue-600 text-white"
+                  : isDark
+                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    : "bg-white text-gray-700 hover:bg-gray-100"
+              }`}
+            >
+              <HiQuestionMarkCircle className="w-3.5 h-3.5" />
+              Quiz
+            </button>
+          </div>
         </div>
       )}
 
@@ -990,6 +1008,13 @@ const ChatPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Quiz Panel */}
+      {showQuizPanel && courseInfo && (
+        <div className="px-4 py-3 max-w-3xl mx-auto w-full">
+          <QuizInChat courseId={courseInfo.id} />
+        </div>
+      )}
 
       {/* Input Area */}
       <ChatInput

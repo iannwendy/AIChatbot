@@ -6,10 +6,13 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 from config.authentication import AdminRolePermission, AdminOrTeacherPermission
-from .models import Course, Quiz, Question, QuizAttempt, ExamSchedule
+from .models import Course, Quiz, Question, QuizAttempt, ExamSchedule, QuizResult
 from .serializers import (
     CourseSerializer, CourseCreateSerializer, EnrollmentSerializer,
-    QuizSerializer, QuestionSerializer, QuizAttemptSerializer, ExamScheduleSerializer
+    QuizSerializer, QuizStudentSerializer, QuizCreateSerializer,
+    QuestionSerializer, QuestionWithAnswerSerializer, QuestionCreateSerializer,
+    QuizAttemptSerializer, QuizResultSerializer,
+    ExamScheduleSerializer
 )
 from apps.users.models import Student
 from apps.documents.rag.retriever import DocumentRetriever
@@ -233,9 +236,10 @@ Trả về JSON array với format:
         # Call LLM
         from langchain_google_genai import ChatGoogleGenerativeAI
         from django.conf import settings
+        from apps.documents.services.config import LLM_MODEL
 
         try:
-            llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash', google_api_key=settings.GEMINI_API_KEY)
+            llm = ChatGoogleGenerativeAI(model=LLM_MODEL, google_api_key=settings.GEMINI_API_KEY)
             response = llm.invoke([{"role": "user", "content": prompt}])
             content = response.content
 
@@ -357,3 +361,312 @@ Trả về JSON array với format:
 
         serializer = ExamScheduleSerializer(exam)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class QuizViewSet(viewsets.ModelViewSet):
+    """Quiz management - CRUD + student quiz taking + teacher progress tracking"""
+    queryset = Quiz.objects.prefetch_related('questions').select_related('course', 'created_by').all()
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return QuizCreateSerializer
+        if self.request.user.role == 'student' and self.action == 'retrieve':
+            return QuizStudentSerializer
+        return QuizSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        course_id = self.request.query_params.get('course_id')
+        qs = Quiz.objects.prefetch_related('questions').select_related('course', 'created_by')
+        if course_id:
+            qs = qs.filter(course_id=course_id)
+        if user.role == 'teacher':
+            qs = qs.filter(course__teacher=user)
+        elif user.role == 'student':
+            qs = qs.filter(course__students=user)
+        return qs
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy',
+                           'add_questions', 'class_progress', 'update_questions']:
+            return [AdminOrTeacherPermission()]
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    # ─── Teacher: Add questions to quiz ───
+    @action(detail=True, methods=['post'], url_path='questions')
+    def add_questions(self, request, pk=None):
+        """Add one or more questions to a quiz"""
+        quiz = self.get_object()
+        questions_data = request.data.get('questions', [])
+        if not questions_data:
+            # Single question mode
+            questions_data = [request.data]
+
+        created = []
+        for i, q in enumerate(questions_data):
+            order = q.get('order', quiz.questions.count() + i)
+            question = Question.objects.create(
+                quiz=quiz,
+                question_text=q.get('question_text', ''),
+                options=q.get('options', []),
+                correct_answer=q.get('correct_answer', 0),
+                explanation=q.get('explanation', ''),
+                order=order,
+            )
+            created.append(QuestionWithAnswerSerializer(question).data)
+
+        return Response({
+            'message': f'Đã thêm {len(created)} câu hỏi',
+            'questions': created,
+        }, status=status.HTTP_201_CREATED)
+
+    # ─── Teacher: Update questions ───
+    @action(detail=True, methods=['put'], url_path='update-questions')
+    def update_questions(self, request, pk=None):
+        """Update all questions in a quiz (replace all)"""
+        quiz = self.get_object()
+        questions_data = request.data.get('questions', [])
+
+        quiz.questions.all().delete()
+        created = []
+        for i, q in enumerate(questions_data):
+            question = Question.objects.create(
+                quiz=quiz,
+                question_text=q.get('question_text', ''),
+                options=q.get('options', []),
+                correct_answer=q.get('correct_answer', 0),
+                explanation=q.get('explanation', ''),
+                order=i,
+            )
+            created.append(QuestionWithAnswerSerializer(question).data)
+
+        return Response({
+            'message': f'Đã cập nhật {len(created)} câu hỏi',
+            'questions': created,
+        })
+
+    # ─── Student: Start quiz attempt ───
+    @action(detail=True, methods=['post'], url_path='start')
+    def start_quiz(self, request, pk=None):
+        """Student starts a quiz attempt"""
+        quiz = self.get_object()
+        user = request.user
+
+        # Check if student is enrolled in the course
+        if user.role == 'student' and not quiz.course.students.filter(id=user.id).exists():
+            return Response({'error': 'Bạn không có quyền làm quiz này'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Create a new attempt
+        attempt = QuizAttempt.objects.create(
+            student=user,
+            quiz=quiz,
+            total_questions=quiz.questions.count(),
+            class_group=request.data.get('class_group', ''),
+        )
+
+        # Return questions WITHOUT correct answers
+        questions = QuestionSerializer(quiz.questions.all(), many=True).data
+
+        return Response({
+            'attempt_id': attempt.id,
+            'quiz_id': quiz.id,
+            'quiz_title': quiz.title,
+            'total_questions': attempt.total_questions,
+            'questions': questions,
+        }, status=status.HTTP_201_CREATED)
+
+    # ─── Student: Submit quiz answers ───
+    @action(detail=True, methods=['post'], url_path='submit')
+    def submit_quiz(self, request, pk=None):
+        """Student submits quiz answers"""
+        quiz = self.get_object()
+        attempt_id = request.data.get('attempt_id')
+        answers = request.data.get('answers', [])  # [{question_id, selected_option, time_spent?}]
+        time_spent_seconds = request.data.get('time_spent_seconds', 0)
+
+        # Find the attempt
+        try:
+            attempt = QuizAttempt.objects.get(id=attempt_id, student=request.user, quiz=quiz)
+        except QuizAttempt.DoesNotExist:
+            return Response({'error': 'Không tìm thấy bài làm'}, status=status.HTTP_404_NOT_FOUND)
+
+        if attempt.completed_at:
+            return Response({'error': 'Bài làm đã được nộp'}, status=status.HTTP_400_BAD_REQUEST)
+
+        questions = {q.id: q for q in quiz.questions.all()}
+        score = 0
+        results = []
+
+        with transaction.atomic():
+            for ans in answers:
+                q_id = ans.get('question_id')
+                selected = ans.get('selected_option')
+                q_time = ans.get('time_spent', 0)
+
+                question = questions.get(q_id)
+                if not question:
+                    continue
+
+                is_correct = selected == question.correct_answer
+                if is_correct:
+                    score += 1
+
+                # Save per-question result
+                QuizResult.objects.create(
+                    attempt=attempt,
+                    question=question,
+                    selected_option=selected,
+                    is_correct=is_correct,
+                    time_spent_seconds=q_time,
+                )
+
+                results.append({
+                    'question_id': q_id,
+                    'question_text': question.question_text,
+                    'options': question.options,
+                    'selected_option': selected,
+                    'correct_answer': question.correct_answer,
+                    'is_correct': is_correct,
+                    'explanation': question.explanation,
+                })
+
+            # Update attempt
+            attempt.score = score
+            attempt.total_questions = len(questions)
+            attempt.answers = [a.get('selected_option') for a in answers]
+            attempt.time_spent_seconds = time_spent_seconds
+            attempt.completed_at = timezone.now()
+            attempt.save()
+
+        total = len(questions)
+        return Response({
+            'attempt_id': attempt.id,
+            'score': score,
+            'total': total,
+            'percentage': round(score / total * 100, 1) if total > 0 else 0,
+            'time_spent_seconds': time_spent_seconds,
+            'results': results,
+        })
+
+    # ─── Student: Get quiz result after submission ───
+    @action(detail=True, methods=['get'], url_path='result')
+    def quiz_result(self, request, pk=None):
+        """Get quiz result for a specific attempt"""
+        quiz = self.get_object()
+        attempt_id = request.query_params.get('attempt_id')
+
+        try:
+            if attempt_id:
+                attempt = QuizAttempt.objects.get(id=attempt_id, quiz=quiz)
+            else:
+                # Get latest attempt for this user
+                attempt = QuizAttempt.objects.filter(
+                    student=request.user, quiz=quiz, completed_at__isnull=False
+                ).first()
+        except QuizAttempt.DoesNotExist:
+            return Response({'error': 'Không tìm thấy kết quả'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not attempt:
+            return Response({'error': 'Không tìm thấy kết quả'}, status=status.HTTP_404_NOT_FOUND)
+
+        attempt_data = QuizAttemptSerializer(attempt).data
+        results_data = QuizResultSerializer(attempt.results.all(), many=True).data
+
+        return Response({
+            'attempt': attempt_data,
+            'results': results_data,
+        })
+
+    # ─── Student: Get my attempts for a quiz ───
+    @action(detail=True, methods=['get'], url_path='my-attempts')
+    def my_attempts(self, request, pk=None):
+        """Get all attempts for current student on this quiz"""
+        quiz = self.get_object()
+        attempts = QuizAttempt.objects.filter(
+            student=request.user, quiz=quiz
+        ).order_by('-started_at')
+        return Response(QuizAttemptSerializer(attempts, many=True).data)
+
+    # ─── Teacher: View class quiz progress ───
+    @action(detail=True, methods=['get'], url_path='class-progress')
+    def class_progress(self, request, pk=None):
+        """Teacher views quiz progress for students in a class"""
+        quiz = self.get_object()
+        class_group = request.query_params.get('class_group', '')
+
+        # Get all students enrolled in the course
+        students = quiz.course.students.all()
+        if class_group:
+            from apps.users.models import Student as StudentModel
+            student_ids_in_class = StudentModel.objects.filter(
+                class_group=class_group
+            ).values_list('user_id', flat=True)
+            students = students.filter(id__in=student_ids_in_class)
+
+        # Get all attempts for this quiz
+        attempts = QuizAttempt.objects.filter(
+            quiz=quiz, completed_at__isnull=False
+        ).select_related('student')
+
+        if class_group:
+            attempts = attempts.filter(student__in=students)
+
+        # Build student progress list
+        attempt_by_student = {}
+        for att in attempts:
+            if att.student_id not in attempt_by_student:
+                attempt_by_student[att.student_id] = att
+            elif att.score > attempt_by_student[att.student_id].score:
+                attempt_by_student[att.student_id] = att  # Keep best score
+
+        student_progress = []
+        for student in students:
+            best_attempt = attempt_by_student.get(student.id)
+            student_progress.append({
+                'student_id': student.id,
+                'student_name': student.get_full_name() or student.username,
+                'student_email': student.email,
+                'completed': best_attempt is not None,
+                'score': best_attempt.score if best_attempt else None,
+                'total_questions': best_attempt.total_questions if best_attempt else quiz.questions.count(),
+                'percentage': round(best_attempt.score / best_attempt.total_questions * 100, 1) if best_attempt and best_attempt.total_questions > 0 else None,
+                'time_spent_seconds': best_attempt.time_spent_seconds if best_attempt else None,
+                'completed_at': best_attempt.completed_at.isoformat() if best_attempt else None,
+                'attempt_count': QuizAttempt.objects.filter(
+                    student=student, quiz=quiz, completed_at__isnull=False
+                ).count(),
+            })
+
+        # Sort: completed first (by score desc), then not completed
+        student_progress.sort(key=lambda x: (not x['completed'], -(x['score'] or 0)))
+
+        completed_count = sum(1 for s in student_progress if s['completed'])
+        avg_score = None
+        if completed_count > 0:
+            total_score = sum(s['percentage'] for s in student_progress if s['completed'])
+            avg_score = round(total_score / completed_count, 1)
+
+        return Response({
+            'quiz_id': quiz.id,
+            'quiz_title': quiz.title,
+            'course_name': quiz.course.name,
+            'total_students': len(student_progress),
+            'completed_count': completed_count,
+            'not_completed_count': len(student_progress) - completed_count,
+            'average_score': avg_score,
+            'students': student_progress,
+        })
+
+    # ─── Teacher: Get all attempts for a quiz ───
+    @action(detail=True, methods=['get'], url_path='all-attempts')
+    def all_attempts(self, request, pk=None):
+        """Teacher views all student attempts for a quiz"""
+        quiz = self.get_object()
+        attempts = QuizAttempt.objects.filter(
+            quiz=quiz, completed_at__isnull=False
+        ).select_related('student').order_by('-completed_at')
+        return Response(QuizAttemptSerializer(attempts, many=True).data)

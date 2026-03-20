@@ -129,6 +129,55 @@ export const coursesAPI = {
   },
 };
 
+// Quiz API
+export const quizAPI = {
+  // Quiz CRUD (Teacher)
+  getAll: (courseId?: number) => {
+    const url = courseId ? `/courses/quizzes/?course_id=${courseId}` : '/courses/quizzes/';
+    return api.get(url);
+  },
+  getById: (quizId: number) => api.get(`/courses/quizzes/${quizId}/`),
+  create: (data: { course: number; title: string; description?: string; topic?: string }) =>
+    api.post('/courses/quizzes/', data),
+  update: (quizId: number, data: any) => api.put(`/courses/quizzes/${quizId}/`, data),
+  delete: (quizId: number) => api.delete(`/courses/quizzes/${quizId}/`),
+
+  // Questions (Teacher)
+  addQuestions: (quizId: number, questions: any[]) =>
+    api.post(`/courses/quizzes/${quizId}/questions/`, { questions }),
+  updateQuestions: (quizId: number, questions: any[]) =>
+    api.put(`/courses/quizzes/${quizId}/update-questions/`, { questions }),
+
+  // Quiz Taking (Student)
+  startQuiz: (quizId: number, classGroup?: string) =>
+    api.post(`/courses/quizzes/${quizId}/start/`, { class_group: classGroup || '' }),
+  submitQuiz: (quizId: number, data: {
+    attempt_id: number;
+    answers: { question_id: number; selected_option: number | null; time_spent?: number }[];
+    time_spent_seconds: number;
+  }) => api.post(`/courses/quizzes/${quizId}/submit/`, data),
+  getResult: (quizId: number, attemptId?: number) => {
+    const url = attemptId
+      ? `/courses/quizzes/${quizId}/result/?attempt_id=${attemptId}`
+      : `/courses/quizzes/${quizId}/result/`;
+    return api.get(url);
+  },
+  getMyAttempts: (quizId: number) => api.get(`/courses/quizzes/${quizId}/my-attempts/`),
+
+  // Teacher Progress
+  getClassProgress: (quizId: number, classGroup?: string) => {
+    const url = classGroup
+      ? `/courses/quizzes/${quizId}/class-progress/?class_group=${classGroup}`
+      : `/courses/quizzes/${quizId}/class-progress/`;
+    return api.get(url);
+  },
+  getAllAttempts: (quizId: number) => api.get(`/courses/quizzes/${quizId}/all-attempts/`),
+
+  // LLM Generate (Teacher)
+  generateQuiz: (courseId: number, numQuestions: number, topic: string) =>
+    api.post(`/courses/${courseId}/generate-quiz/`, { num_questions: numQuestions, topic }),
+};
+
 // Documents API
 export const documentsAPI = {
   getAll: (courseId?: number) => {

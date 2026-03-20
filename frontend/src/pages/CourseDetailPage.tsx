@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { HiOutlineDocumentText, HiOutlineChatBubbleLeftRight, HiOutlineAcademicCap, HiOutlineArrowLeft, HiOutlineCheckCircle, HiOutlineClock } from 'react-icons/hi2';
 import { coursesAPI, documentsAPI } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 interface Course {
   id: number;
@@ -27,6 +28,7 @@ const CourseDetailPage: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const isDark = theme === 'dark';
 
   const [course, setCourse] = useState<Course | null>(null);
@@ -152,7 +154,7 @@ const CourseDetailPage: React.FC = () => {
               Chat với AI
             </button>
             <button
-              onClick={() => navigate(`/quiz/${courseId}`)}
+              onClick={() => user?.role === 'teacher' ? navigate(`/teacher/quizzes/${courseId}`) : navigate(`/quiz/${courseId}`)}
               className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors ${
                 isDark
                   ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
@@ -160,7 +162,7 @@ const CourseDetailPage: React.FC = () => {
               }`}
             >
               <HiOutlineAcademicCap className="w-5 h-5" />
-              Làm Quiz
+              {user?.role === 'teacher' ? 'Quản lý Quiz' : 'Làm Quiz'}
             </button>
           </div>
         </div>

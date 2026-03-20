@@ -172,22 +172,7 @@ const ProfilePage: React.FC = () => {
 
           <div className="space-y-4">
             {/* Language */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <HiOutlineLanguage className="w-5 h-5 text-gray-400" />
-                <span className="text-sm text-gray-700">Ngôn ngữ</span>
-              </div>
-              <select
-                value={language}
-                onChange={e => setLanguage(e.target.value as 'vi' | 'en')}
-                className={`px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${
-                  isDark ? 'bg-gray-800 border-gray-600 text-gray-200' : 'border-gray-200'
-                }`}
-              >
-                <option value="vi">Tiếng Việt</option>
-                <option value="en">English</option>
-              </select>
-            </div>
+
 
             {/* Theme Toggle */}
             <div className="flex items-center justify-between">

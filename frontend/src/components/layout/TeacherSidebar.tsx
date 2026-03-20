@@ -4,6 +4,7 @@ import {
   HiOutlineChartBar,
   HiOutlineDocumentText,
   HiOutlineAcademicCap,
+  HiOutlineQuestionMarkCircle,
   HiOutlineArrowRightOnRectangle,
   HiOutlineBars3,
   HiOutlineXMark,
@@ -21,6 +22,7 @@ const menuItems: MenuItem[] = [
   { icon: HiOutlineChartBar, label: 'Tổng quan', path: '/teacher/dashboard' },
   { icon: HiOutlineDocumentText, label: 'Tài liệu của tôi', path: '/teacher/documents' },
   { icon: HiOutlineAcademicCap, label: 'Môn học của tôi', path: '/teacher/courses' },
+  { icon: HiOutlineQuestionMarkCircle, label: 'Quiz', path: '/teacher/quizzes' },
 ];
 
 const TeacherSidebar: React.FC = () => {
@@ -55,7 +57,7 @@ const TeacherSidebar: React.FC = () => {
       {/* Menu */}
       <nav className="flex-1 overflow-y-auto py-4">
         {menuItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
           const Icon = item.icon;
           return (
             <button

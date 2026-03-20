@@ -428,25 +428,28 @@ class Command(BaseCommand):
         for student in students:
             # Create enrollments for previous semester (with grades)
             for course in courses[:3]:
+                section = CourseSection.objects.filter(course=course, semester=previous_semester).first()
+                if not section:
+                    continue
+                midterm = Decimal(str(random.randint(60, 99)))
+                final = Decimal(str(random.randint(60, 99)))
+                total = Decimal(str(random.randint(60, 99)))
                 Enrollment.objects.get_or_create(
                     student=student,
-                    course_section__course=course,
-                    course_section__semester=previous_semester,
+                    course_section=section,
                     defaults={
-                        'course_section': course.sections.filter(semester=previous_semester).first() or
-                                         CourseSection.objects.filter(course=course, semester=previous_semester).first(),
                         'semester': previous_semester,
                         'status': 'approved',
-                        'midterm_score': Decimal(str(random.randint(60, 100))),
-                        'final_score': Decimal(str(random.randint(60, 100))),
-                        'total_score': Decimal(str(random.randint(60, 100))),
+                        'midterm_score': midterm,
+                        'final_score': final,
+                        'total_score': total,
                         'grade': random.choice(grades),
                     }
                 )
 
             # Create current enrollments (no grades yet)
             for course in courses[:4]:
-                section = course.sections.filter(semester=current_semester).first()
+                section = CourseSection.objects.filter(course=course, semester=current_semester).first()
                 if section:
                     Enrollment.objects.get_or_create(
                         student=student,
@@ -458,8 +461,8 @@ class Command(BaseCommand):
                     )
 
             # Create academic records
-            gpa = Decimal(random.randint(60, 95)) / Decimal(10)
-            cumulative_gpa = Decimal(random.randint(65, 90)) / Decimal(10)
+            gpa = Decimal(str(random.randint(60, 95))) / Decimal('10')
+            cumulative_gpa = Decimal(str(random.randint(65, 90))) / Decimal('10')
 
             AcademicRecord.objects.get_or_create(
                 student=student,

@@ -88,9 +88,11 @@ class QuizAttempt(models.Model):
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='attempts')
     score = models.PositiveIntegerField(default=0)
     total_questions = models.PositiveIntegerField(default=0)
-    answers = models.JSONField()  # List of student's selected indices
+    answers = models.JSONField(default=list)  # List of student's selected indices
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    class_group = models.CharField(max_length=100, blank=True, default='')  # e.g., "K17.2"
+    time_spent_seconds = models.IntegerField(default=0)                       # seconds spent on quiz
 
     class Meta:
         db_table = 'quiz_attempts'
@@ -98,3 +100,19 @@ class QuizAttempt(models.Model):
 
     def __str__(self):
         return f"{self.student.username} - {self.quiz.title} - {self.score}/{self.total_questions}"
+
+
+class QuizResult(models.Model):
+    """Per-question result tracking for a quiz attempt"""
+    attempt = models.ForeignKey(QuizAttempt, on_delete=models.CASCADE, related_name='results')
+    question = models.ForeignKey('Question', on_delete=models.CASCADE)
+    selected_option = models.IntegerField(null=True, blank=True)
+    is_correct = models.BooleanField(default=False)
+    time_spent_seconds = models.IntegerField(default=0)  # seconds spent on this question
+
+    class Meta:
+        db_table = 'quiz_results'
+        ordering = ['id']
+
+    def __str__(self):
+        return f"Result: {self.attempt} - Q{self.question.order + 1} - {'✓' if self.is_correct else '✗'}"

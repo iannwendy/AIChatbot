@@ -22,6 +22,11 @@ import AdminSettingsPage from './pages/admin/SettingsPage';
 import TeacherDashboardPage from './pages/teacher/DashboardPage';
 import TeacherDocumentsPage from './pages/teacher/DocumentsPage';
 import TeacherCoursesPage from './pages/teacher/CoursesPage';
+import TeacherQuizManagementPage from './pages/teacher/QuizManagementPage';
+import TeacherClassProgressPage from './pages/teacher/ClassQuizProgressPage';
+// Student pages
+import StudentQuizPage from './pages/StudentQuizPage';
+import StudentCourseQuizPage from './pages/StudentCourseQuizPage';
 import './index.css';
 
 /* Protected Route wrapper with role-based access */
@@ -113,6 +118,8 @@ function App() {
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/chat/:courseId" element={<CourseDetailPage />} />
                 <Route path="/course/:courseId" element={<CourseDetailPage />} />
+                <Route path="/student/quiz/:quizId" element={<StudentQuizPage />} />
+                <Route path="/quiz/:courseId" element={<StudentCourseQuizPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
@@ -143,6 +150,9 @@ function App() {
                 <Route path="/teacher/dashboard" element={<TeacherDashboardPage />} />
                 <Route path="/teacher/documents" element={<TeacherDocumentsPage />} />
                 <Route path="/teacher/courses" element={<TeacherCoursesPage />} />
+                <Route path="/teacher/quizzes" element={<TeacherQuizManagementPage />} />
+                <Route path="/teacher/quizzes/:courseId" element={<TeacherQuizManagementPage />} />
+                <Route path="/teacher/class-progress" element={<TeacherClassProgressPage />} />
               </Route>
 
               {/* Fallback redirect */}

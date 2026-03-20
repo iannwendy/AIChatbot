@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Course, Quiz, Question, QuizAttempt, ExamSchedule
+from .models import Course, Quiz, Question, QuizAttempt, ExamSchedule, QuizResult
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -73,26 +73,84 @@ class EnrollmentSerializer(serializers.Serializer):
 
 
 class QuestionSerializer(serializers.ModelSerializer):
+    """Question serializer WITHOUT correct answer (for students taking quiz)"""
+    class Meta:
+        model = Question
+        fields = ['id', 'question_text', 'options', 'order']
+
+
+class QuestionWithAnswerSerializer(serializers.ModelSerializer):
+    """Question serializer WITH correct answer (for teachers / after submission)"""
+    class Meta:
+        model = Question
+        fields = ['id', 'question_text', 'options', 'correct_answer', 'explanation', 'order']
+
+
+class QuestionCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating/updating questions"""
     class Meta:
         model = Question
         fields = ['id', 'question_text', 'options', 'correct_answer', 'explanation', 'order']
 
 
 class QuizSerializer(serializers.ModelSerializer):
+    questions = QuestionWithAnswerSerializer(many=True, read_only=True)
+    question_count = serializers.IntegerField(read_only=True)
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = Quiz
+        fields = ['id', 'title', 'description', 'topic', 'question_count', 'questions',
+                  'created_by', 'created_by_name', 'created_at']
+        read_only_fields = ['created_by', 'created_at']
+
+
+class QuizStudentSerializer(serializers.ModelSerializer):
+    """Quiz serializer for students (no correct answers)"""
     questions = QuestionSerializer(many=True, read_only=True)
-    question_count = serializers.IntegerField(source='question_count', read_only=True)
+    question_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Quiz
         fields = ['id', 'title', 'description', 'topic', 'question_count', 'questions', 'created_at']
 
 
+class QuizCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating quizzes"""
+    class Meta:
+        model = Quiz
+        fields = ['id', 'title', 'description', 'topic', 'course']
+        read_only_fields = ['id']
+
+
 class QuizAttemptSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.get_full_name', read_only=True)
+    student_email = serializers.CharField(source='student.email', read_only=True)
+    quiz_title = serializers.CharField(source='quiz.title', read_only=True)
+    percentage = serializers.SerializerMethodField()
 
     class Meta:
         model = QuizAttempt
-        fields = ['id', 'student', 'student_name', 'score', 'total_questions', 'started_at', 'completed_at']
+        fields = ['id', 'student', 'student_name', 'student_email', 'quiz', 'quiz_title',
+                  'score', 'total_questions', 'percentage', 'time_spent_seconds',
+                  'class_group', 'started_at', 'completed_at']
+
+    def get_percentage(self, obj):
+        if obj.total_questions > 0:
+            return round(obj.score / obj.total_questions * 100, 1)
+        return 0
+
+
+class QuizResultSerializer(serializers.ModelSerializer):
+    question_text = serializers.CharField(source='question.question_text', read_only=True)
+    options = serializers.JSONField(source='question.options', read_only=True)
+    correct_answer = serializers.IntegerField(source='question.correct_answer', read_only=True)
+    explanation = serializers.CharField(source='question.explanation', read_only=True)
+
+    class Meta:
+        model = QuizResult
+        fields = ['id', 'question', 'question_text', 'options', 'selected_option',
+                  'correct_answer', 'is_correct', 'explanation', 'time_spent_seconds']
 
 
 class ExamScheduleSerializer(serializers.ModelSerializer):

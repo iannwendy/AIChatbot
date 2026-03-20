@@ -8,8 +8,9 @@ class Student(models.Model):
     """Student profile"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
     student_id = models.CharField(max_length=50, unique=True)
+    class_group = models.CharField(max_length=100, blank=True, default='')  # e.g., "K17.2", "CNTT01"
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'students'
 
