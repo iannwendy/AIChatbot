@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   HiOutlineKey,
-  HiOutlineServerStack,
   HiOutlineBookOpen,
-  HiOutlineTrash,
   HiOutlinePlus,
   HiOutlineEye,
   HiOutlineEyeSlash,
@@ -19,23 +17,19 @@ interface Course {
 const SettingsPage: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [llmServer, setLlmServer] = useState('http://localhost:11434');
   const [courses, setCourses] = useState<Course[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     fetchCourses();
-    // Load saved settings
     const savedKey = localStorage.getItem('api_key') || '';
-    const savedServer = localStorage.getItem('llm_server') || 'http://localhost:11434';
     setApiKey(savedKey);
-    setLlmServer(savedServer);
   }, []);
 
   const fetchCourses = async () => {
     try {
-      const res = await coursesAPI.getAll();
+      const res = await coursesAPI.myCourses();
       setCourses(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to fetch courses:', err);
@@ -45,7 +39,6 @@ const SettingsPage: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     localStorage.setItem('api_key', apiKey);
-    localStorage.setItem('llm_server', llmServer);
     await new Promise(r => setTimeout(r, 500));
     setSaving(false);
     setSaved(true);
@@ -85,26 +78,6 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Local LLM Server */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <HiOutlineServerStack className="w-5 h-5 text-gray-500" />
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
-              Local LLM Server
-            </h3>
-          </div>
-          <p className="text-xs text-gray-400 mb-3">
-            Địa chỉ server LLM cục bộ (Ollama, LM Studio, ...)
-          </p>
-          <input
-            type="text"
-            value={llmServer}
-            onChange={e => setLlmServer(e.target.value)}
-            placeholder="http://localhost:11434"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all font-mono"
-          />
-        </div>
-
         {/* Enrolled Courses */}
         <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -114,10 +87,6 @@ const SettingsPage: React.FC = () => {
                 Môn học đang tham gia
               </h3>
             </div>
-            <button className="flex items-center gap-1 px-3 py-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-              <HiOutlinePlus className="w-3.5 h-3.5" />
-              Thêm môn
-            </button>
           </div>
 
           {courses.length === 0 ? (
@@ -135,9 +104,6 @@ const SettingsPage: React.FC = () => {
                     <div className="text-sm font-medium text-gray-700">{course.name}</div>
                     <div className="text-xs text-gray-400">{course.code}</div>
                   </div>
-                  <button className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
-                    <HiOutlineTrash className="w-4 h-4" />
-                  </button>
                 </div>
               ))}
             </div>
