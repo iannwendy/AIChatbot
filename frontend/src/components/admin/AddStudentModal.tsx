@@ -33,7 +33,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({
   const isDark = theme === 'dark';
   const [searchQuery, setSearchQuery] = useState('');
   const [students, setStudents] = useState<Student[]>([]);
-  const [enrolledStudents, setEnrolledStudents] = useState<number[]>([]);
+  const [enrolledStudents, setEnrolledStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
@@ -49,7 +49,8 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({
     try {
       const res = await coursesAPI.getById(courseId);
       const course = res.data;
-      const enrolled = course.students?.map((s: any) => s.id) || [];
+      // Store full student objects, not just IDs
+      const enrolled = course.students || [];
       setEnrolledStudents(enrolled);
     } catch (err) {
       console.error('Failed to load enrolled students:', err);
@@ -94,11 +95,17 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({
     }, 300);
   };
 
-  const handleEnrollStudent = async (studentId: number) => {
+  const handleEnrollStudent = async (studentId: number, student?: Student) => {
     setEnrolling(true);
     try {
       await coursesAPI.enroll(courseId, [studentId]);
-      setEnrolledStudents([...enrolledStudents, studentId]);
+      // Add student to enrolled list
+      if (student) {
+        setEnrolledStudents([...enrolledStudents, student]);
+      } else {
+        // If student object not provided, reload the list
+        await loadEnrolledStudents();
+      }
       onSuccess();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to enroll student');
@@ -111,7 +118,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({
     setEnrolling(true);
     try {
       await coursesAPI.unenroll(courseId, [studentId]);
-      setEnrolledStudents(enrolledStudents.filter(id => id !== studentId));
+      setEnrolledStudents(enrolledStudents.filter(s => s.id !== studentId));
       onSuccess();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to remove student');
@@ -174,7 +181,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({
               Đã tham gia ({enrolledStudents.length})
             </h3>
             <div className={`max-h-32 overflow-y-auto rounded-lg border ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
-              {students.filter(s => enrolledStudents.includes(s.id)).map((student, idx) => (
+              {enrolledStudents.map((student, idx) => (
                 <div
                   key={student.id}
                   className={`flex items-center justify-between px-3 py-2 ${
@@ -218,7 +225,8 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({
               </div>
             ) : (
               students.map((student, idx) => {
-                const isEnrolled = enrolledStudents.includes(student.id);
+                // Check by ID since enrolledStudents is now array of objects
+                const isEnrolled = enrolledStudents.some(e => e.id === student.id);
                 return (
                   <div
                     key={student.id}
@@ -240,7 +248,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({
                       </span>
                     ) : (
                       <button
-                        onClick={() => handleEnrollStudent(student.id)}
+                        onClick={() => handleEnrollStudent(student.id, student)}
                         disabled={enrolling}
                         className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
                       >

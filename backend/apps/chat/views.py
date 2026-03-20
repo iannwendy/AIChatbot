@@ -13,7 +13,6 @@ from bson import ObjectId
 from datetime import datetime
 from .models import Course
 from .mongo_utils import get_collection
-from apps.documents.rag.chain import RAGChain
 from apps.documents.rag.agent import RAGAgent
 from apps.documents.services.config import AVAILABLE_MODELS, MEMORY_WINDOW_SIZE
 import json
@@ -232,14 +231,26 @@ class ChatSessionViewSet(viewsets.ViewSet):
             if m.get('message_type') in ('user', 'assistant')
         ]
 
-        # Call RAG chain
+        # Call RAG Agent (handles both document search and admin DB queries)
         model = request.data.get('model')
         try:
-            rag_chain = RAGChain(model=model)
-            rag_result = rag_chain.invoke_with_history(
+            # Get course name
+            if course_id:
+                try:
+                    course = Course.objects.get(id=course_id)
+                    course_name = course.name
+                except Course.DoesNotExist:
+                    course_name = ""
+            else:
+                course_name = session.get('course_name', '')
+
+            rag_agent = RAGAgent(model=model)
+            rag_result = rag_agent.invoke(
                 question=content,
                 course_id=course_id,
-                conversation_history=conversation_history[:-1],  # Exclude current question
+                course_name=course_name,
+                conversation_history=conversation_history[:-1],
+                user_id=request.user.id,
             )
             response_content = rag_result['answer']
             sources = rag_result['sources']
@@ -345,30 +356,45 @@ class ChatSessionViewSet(viewsets.ViewSet):
             sources = []
 
             try:
-                # Use RAGChain with real streaming (more reliable)
-                logger.info(f"[Stream] Initializing RAGChain with model: {model}")
-                rag_chain = RAGChain(model=model)
+                # Use RAGAgent for intelligent function calling (RAG + Admin DB queries)
+                logger.info(f"[Stream] Initializing RAGAgent with model: {model}")
+                rag_agent = RAGAgent(model=model)
 
-                logger.info(f"[Stream] Retrieving context for course_id: {course_id}")
-                retrieval = rag_chain.retriever.retrieve_with_context(
-                    query=content,
-                    course_id=course_id,
-                )
-                sources = retrieval.get('sources', [])
-                context = retrieval.get('context', '')
-                logger.info(f"[Stream] Retrieved {len(sources)} sources, has_results: {retrieval.get('has_results')}")
+                # Get course info if available
+                if course_id:
+                    try:
+                        course = Course.objects.get(id=course_id)
+                        course_name = course.name
+                    except Course.DoesNotExist:
+                        course_name = ""
+                else:
+                    course_name = session.get('course_name', '')
 
-                # Stream using pre-retrieved context (no double retrieval)
-                logger.info(f"[Stream] Starting LLM streaming...")
-                for chunk in rag_chain.stream_with_context(
+                logger.info(f"[Stream] Processing with agent: course_id={course_id}, user_id={request.user.id}")
+
+                # Invoke agent once - it handles routing (RAG vs admin DB)
+                result = rag_agent.invoke(
                     question=content,
-                    context=context,
+                    course_id=course_id,
+                    course_name=course_name,
                     conversation_history=conversation_history[:-1],
-                ):
+                    user_id=request.user.id,
+                )
+
+                answer = result.get('answer', '')
+                sources = result.get('sources', [])
+                tool_used = result.get('tool_used')
+
+                logger.info(f"[Stream] Agent used tool: {tool_used}, answer length: {len(answer)}")
+
+                # Stream the pre-computed answer in chunks
+                chunk_size = 10
+                for i in range(0, len(answer), chunk_size):
+                    chunk = answer[i:i + chunk_size]
                     full_response += chunk
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
 
-                logger.info(f"[Stream] LLM streaming complete. Response length: {len(full_response)}")
+                logger.info(f"[Stream] Streaming complete. Response length: {len(full_response)}")
 
             except Exception as e:
                 logger.error(f"Streaming RAG error: {e}", exc_info=True)

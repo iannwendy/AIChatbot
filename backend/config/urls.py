@@ -14,6 +14,7 @@ urlpatterns = [
     path('api/courses/', include('apps.courses.urls')),
     path('api/documents/', include('apps.documents.urls')),
     path('api/chat/', include('apps.chat.urls')),
+    path('api/academic/', include('apps.academic.urls')),
 ]
 
 if settings.DEBUG:

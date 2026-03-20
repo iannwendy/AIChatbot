@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'apps.courses',
     'apps.documents',
     'apps.chat',
+    'apps.academic',  # Administrative models
 ]
 
 MIDDLEWARE = [

@@ -5,10 +5,19 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
+class StudentBriefSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'full_name']
+
+
 class CourseSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(source='teacher.get_full_name', read_only=True)
     student_count = serializers.SerializerMethodField()
     document_count = serializers.SerializerMethodField()
+    students = StudentBriefSerializer(many=True, read_only=True)
 
     class Meta:
         model = Course

@@ -59,6 +59,23 @@ class CourseViewSet(viewsets.ModelViewSet):
         student_ids = request.data.get('student_ids', [])
 
         students = User.objects.filter(id__in=student_ids, role='student')
+
+        # Check for already enrolled students
+        existing_ids = set(course.students.values_list('id', flat=True))
+        already_enrolled = [sid for sid in student_ids if sid in existing_ids]
+
+        if already_enrolled:
+            # Get emails of already enrolled students for error message
+            existing_students = User.objects.filter(id__in=already_enrolled)
+            emails = ', '.join([u.email for u in existing_students[:3]])
+            if len(already_enrolled) > 3:
+                emails += f' (+{len(already_enrolled) - 3} more)'
+            return Response({
+                'error': f'Sinh viên đã có trong lớp: {emails}',
+                'already_enrolled': already_enrolled,
+                'student_count': course.students.count()
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         course.students.add(*students)
 
         return Response({

@@ -1,6 +1,12 @@
 """
 RAG Agent - LLM with tool calling capability.
-Decides when to search documents vs query database.
+Decides when to search documents vs query administrative database.
+
+Flow:
+  User question → LLM (with tool definitions) → LLM decides:
+    A) Call search_documents  → RAG pipeline → answer from documents
+    B) Call admin tool (get_tuition_fee, get_schedule, etc.) → SQL query → answer from DB
+    C) Answer directly from general knowledge
 """
 import logging
 from typing import Dict, Any, Optional, List, Generator
@@ -14,18 +20,45 @@ from ..services.config import LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS, RETRIE
 
 logger = logging.getLogger(__name__)
 
-GENERAL_SYSTEM_PROMPT = """Bạn là trợ lý AI thông minh cho một nền tảng giáo dục.
-Nhiệm vụ của bạn là hỗ trợ sinh viên trong học tập.
+AGENT_SYSTEM_PROMPT = """Bạn là trợ lý AI thông minh hỗ trợ sinh viên đại học.
 
-Quy tắc:
-1. Nếu có tài liệu khóa học được cung cấp, ưu tiên trả lời dựa trên tài liệu đó.
-2. Nếu không có tài liệu, hãy trả lời dựa trên kiến thức chung của bạn.
-3. Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu.
-4. Luôn thân thiện và hữu ích."""
+BẠN CÓ CÁC CÔNG CỤ (tools) ĐỂ TRA CỨU THÔNG TIN:
+- Nếu câu hỏi về NỘI DUNG HỌC TẬP (lý thuyết, bài giảng, kiến thức môn học): dùng tool "search_documents"
+- Nếu câu hỏi về HÀNH CHÍNH (lịch thi, học phí, thời khóa biểu, điểm, KTX, thư viện...): dùng tool hành chính tương ứng
+- Nếu câu hỏi chung chung: trả lời trực tiếp không cần tool
+
+QUY TẮC CHỌN TOOL:
+1. "Lịch thi", "thi khi nào", "phòng thi" → get_exam_schedule
+2. "Thời khóa biểu", "lịch học", "học phòng nào" → get_my_schedule
+3. "Học phí", "đóng tiền", "hạn nộp" → get_tuition_fee
+4. "Học bổng", "nhận học bổng" → get_scholarships
+5. "Điểm", "bảng điểm", "GPA", "tín chỉ tích lũy" → get_academic_records hoặc get_enrollments
+6. "Môn đã đăng ký", "danh sách môn" → get_enrollments
+7. "Nghỉ lễ", "lịch năm học", "khi nào đăng ký" → get_academic_calendar
+8. "Thông báo", "tin tức" → get_announcements
+9. "Thẻ sinh viên", "mã thẻ" → get_student_id_card
+10. "Mượn sách", "thư viện", "sách" → get_library_records
+11. "KTX", "ký túc xá", "phòng ở" → get_dormitory_info
+12. "Bảo hiểm", "BHYT" → get_health_insurance
+13. "Liên hệ", "phòng ban", "số điện thoại", "email" → get_contacts
+14. "Học kỳ hiện tại", "đang học kỳ mấy" → get_current_semester
+15. "Ngành học", "chuyên ngành" → get_majors
+16. Kiến thức môn học, lý thuyết → search_documents
+
+PHONG CÁCH TRẢ LỜI:
+- Tiếng Việt, rõ ràng, thân thiện
+- Dùng markdown khi cần (bảng, danh sách)
+- Trích dẫn nguồn [1], [2] nếu dùng search_documents"""
 
 
 class RAGAgent:
-    """Agent that uses tool calling to decide how to answer."""
+    """Agent that uses tool calling to decide how to answer.
+
+    The agent uses LLM function calling to route questions:
+    - Academic knowledge → Vector DB (RAG pipeline)
+    - Administrative queries → SQL Database (Django ORM)
+    - General questions → Direct LLM response
+    """
 
     def __init__(self, model: Optional[str] = None):
         api_key = settings.GEMINI_API_KEY
@@ -49,19 +82,23 @@ class RAGAgent:
         course_id: Optional[int] = None,
         course_name: str = "",
         conversation_history: Optional[List[Dict]] = None,
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Agent decides which tool to use, executes it, then generates answer.
 
+        Args:
+            question: User's question
+            course_id: Current course ID (for course-specific queries)
+            course_name: Current course name
+            conversation_history: Previous chat messages
+            user_id: Logged-in user's ID (for personal queries like grades, fees)
+
         Returns:
             Dict with 'answer', 'sources', 'tool_used'
         """
-        # If no course_id, skip tool calling and use direct RAG
-        if not course_id:
-            return self._fallback_rag(question, course_id)
-
         # Build messages
-        messages = [{"role": "system", "content": GENERAL_SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
 
         # Add conversation history
         for msg in (conversation_history or []):
@@ -89,17 +126,27 @@ class RAGAgent:
 
             logger.info(f"Agent calling tool: {tool_name} with args: {tool_args}")
 
-            # Execute the tool
-            tool_result = execute_tool(tool_name, tool_args, course_id, course_name)
+            # Execute the tool with user_id for personal queries
+            tool_result = execute_tool(
+                tool_name=tool_name,
+                params=tool_args,
+                course_id=course_id,
+                course_name=course_name,
+                user_id=user_id,
+            )
 
-            # Step 3: Build a new prompt with tool result for final answer
+            logger.info(f"Tool result preview: {tool_result[:200]}...")
+
+            # Step 3: Build final prompt with tool result for a natural answer
             final_prompt = (
-                f"Kết quả từ tool '{tool_name}':\n{tool_result}\n\n"
-                f"Dựa trên kết quả trên, hãy trả lời câu hỏi: {question}"
+                f"Kết quả tra cứu từ hệ thống (tool '{tool_name}'):\n"
+                f"---\n{tool_result}\n---\n\n"
+                f"Dựa trên dữ liệu trên, hãy trả lời câu hỏi của sinh viên một cách tự nhiên, "
+                f"thân thiện và dễ hiểu: {question}"
             )
             try:
                 final_response = self.llm.invoke([
-                    {"role": "system", "content": GENERAL_SYSTEM_PROMPT},
+                    {"role": "system", "content": AGENT_SYSTEM_PROMPT},
                     {"role": "user", "content": final_prompt},
                 ])
                 answer = final_response.content
@@ -135,17 +182,28 @@ class RAGAgent:
         course_id: Optional[int] = None,
         course_name: str = "",
         conversation_history: Optional[List[Dict]] = None,
+        user_id: Optional[int] = None,
     ) -> Generator[str, None, None]:
         """
-        Stream agent response. Falls back to non-streaming for tool calls.
-        Yields chunks of text.
+        Stream agent response. Tool calls are non-streaming, then result is chunked.
+        Yields chunks of text for SSE.
         """
-        result = self.invoke(question, course_id, course_name, conversation_history)
+        result = self.invoke(
+            question=question,
+            course_id=course_id,
+            course_name=course_name,
+            conversation_history=conversation_history,
+            user_id=user_id,
+        )
         # Yield the answer in chunks for SSE compatibility
         answer = result.get('answer', '')
         chunk_size = 10
         for i in range(0, len(answer), chunk_size):
             yield answer[i:i + chunk_size]
+
+    def get_tool_used(self) -> Optional[str]:
+        """Return the last tool used (for logging/debugging)."""
+        return getattr(self, '_last_tool_used', None)
 
     def _fallback_rag(self, question: str, course_id: Optional[int] = None) -> Dict[str, Any]:
         """Fallback to regular RAG search when agent fails."""
@@ -154,7 +212,6 @@ class RAGAgent:
             course_id=course_id,
         )
 
-        # Always try to answer - even without documents
         if retrieval['has_results']:
             prompt = (
                 f"Dựa trên tài liệu:\n{retrieval['context']}\n\n"
@@ -162,13 +219,12 @@ class RAGAgent:
             )
             sources = retrieval['sources']
         else:
-            # No documents - answer from general knowledge
             prompt = f"Câu hỏi: {question}"
             sources = []
 
         try:
             response = self.llm.invoke([
-                {"role": "system", "content": GENERAL_SYSTEM_PROMPT},
+                {"role": "system", "content": AGENT_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ])
             return {

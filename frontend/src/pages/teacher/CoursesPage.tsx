@@ -268,7 +268,9 @@ const TeacherCoursesPage: React.FC = () => {
         open={!!uploadDocCourse}
         onClose={() => setUploadDocCourse(null)}
         onUpload={handleUploadDocument}
-        courses={uploadDocCourse ? [{ id: uploadDocCourse.id, name: uploadDocCourse.name, code: uploadDocCourse.code }] : []}
+        courseId={uploadDocCourse?.id || 0}
+        courseName={uploadDocCourse?.name || ''}
+        courseCode={uploadDocCourse?.code || ''}
         isLoading={isUploading}
       />
     </div>
