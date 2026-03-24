@@ -17,6 +17,7 @@ from apps.documents.rag.agent import RAGAgent
 from apps.documents.services.config import AVAILABLE_MODELS, MEMORY_WINDOW_SIZE
 import json
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -59,18 +60,15 @@ class ChatSessionViewSet(viewsets.ViewSet):
         course_id = request.data.get('course_id', 0)
         title = request.data.get('title', 'New Chat')
 
-        # Handle case where course_id is 0 or not provided (general chat)
         course = None
         if course_id and course_id != 0:
             course = get_object_or_404(Course, id=course_id)
-            # Check if user is enrolled in the course
             if request.user.role == 'student' and request.user not in course.students.all():
                 return Response(
                     {'error': 'You are not enrolled in this course'},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-        # Create session in MongoDB
         session_data = {
             'user_id': request.user.id,
             'course_id': course_id if course_id != 0 else None,
@@ -106,7 +104,6 @@ class ChatSessionViewSet(viewsets.ViewSet):
         if not session:
             return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Get messages for this session
         messages = get_collection('chat_messages').find({
             'session_id': str(session['_id'])
         }).sort('created_at', 1)
@@ -124,6 +121,7 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 'message_type': msg['message_type'],
                 'content': msg['content'],
                 'sources': msg.get('sources', []),
+                'practice_quiz': msg.get('practice_quiz'),
                 'created_at': msg['created_at'].isoformat() if msg.get('created_at') else None,
             } for msg in messages]
         }
@@ -143,7 +141,6 @@ class ChatSessionViewSet(viewsets.ViewSet):
         if not session:
             return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Update fields from request data
         update_data = {}
         if 'title' in request.data:
             update_data['title'] = request.data['title']
@@ -155,13 +152,52 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 {'$set': update_data}
             )
 
-        # Return updated session
         session = get_collection('chat_sessions').find_one({'_id': ObjectId(pk)})
         return Response({
             'id': str(session['_id']),
             'title': session.get('title', 'New Chat'),
             'updated_at': session.get('updated_at').isoformat() if session.get('updated_at') else None,
         })
+
+    @action(detail=True, methods=['patch'], url_path='update_practice_quiz')
+    def update_practice_quiz(self, request, pk=None):
+        """Update practice quiz answers/results in a chat message."""
+        message_id = request.data.get('message_id')
+        if not message_id:
+            return Response({'error': 'message_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            msg_obj_id = ObjectId(message_id)
+        except Exception:
+            return Response({'error': 'Invalid message_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        msg = get_collection('chat_messages').find_one({
+            '_id': msg_obj_id,
+            'session_id': pk,
+            'user_id': request.user.id,
+        })
+        if not msg:
+            return Response({'error': 'Message not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if 'practice_quiz' not in msg:
+            return Response({'error': 'Message has no practice quiz'}, status=status.HTTP_400_BAD_REQUEST)
+
+        answers = request.data.get('answers')
+        result_data = request.data.get('result')
+
+        update_fields = {}
+        if answers is not None:
+            update_fields['practice_quiz.answers'] = answers
+        if result_data is not None:
+            update_fields['practice_quiz.result'] = result_data
+
+        if update_fields:
+            get_collection('chat_messages').update_one(
+                {'_id': msg_obj_id},
+                {'$set': update_fields}
+            )
+
+        return Response({'status': 'ok'})
 
     def destroy(self, request, pk=None):
         """Delete a chat session"""
@@ -170,8 +206,6 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 '_id': ObjectId(pk),
                 'user_id': request.user.id
             })
-
-            # Also delete all messages in this session
             get_collection('chat_messages').delete_many({'session_id': pk})
 
             if result.deleted_count == 0:
@@ -183,8 +217,7 @@ class ChatSessionViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['post'])
     def send_message(self, request, pk=None):
-        """Send a message in chat session"""
-        # Get session
+        """Send a message in chat session (non-streaming)"""
         try:
             session = get_collection('chat_sessions').find_one({
                 '_id': ObjectId(pk),
@@ -203,7 +236,6 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Save user message to MongoDB
         user_message_data = {
             'session_id': pk,
             'user_id': request.user.id,
@@ -215,10 +247,8 @@ class ChatSessionViewSet(viewsets.ViewSet):
         user_msg_result = get_collection('chat_messages').insert_one(user_message_data)
         user_message_data['_id'] = user_msg_result.inserted_id
 
-        # Get course_id for retrieval
         course_id = session.get('course_id')
 
-        # Get conversation history (last 10 messages)
         recent_messages = list(
             get_collection('chat_messages')
             .find({'session_id': pk})
@@ -231,10 +261,8 @@ class ChatSessionViewSet(viewsets.ViewSet):
             if m.get('message_type') in ('user', 'assistant')
         ]
 
-        # Call RAG Agent (handles both document search and admin DB queries)
         model = request.data.get('model')
         try:
-            # Get course name
             if course_id:
                 try:
                     course = Course.objects.get(id=course_id)
@@ -259,10 +287,8 @@ class ChatSessionViewSet(viewsets.ViewSet):
             response_content = "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi. Vui lòng thử lại."
             sources = []
 
-        # Format sources for storage (extract source strings for frontend display)
         source_labels = [s.get('source', '') for s in sources if s.get('source')]
 
-        # Save assistant message to MongoDB
         assistant_message_data = {
             'session_id': pk,
             'user_id': request.user.id,
@@ -274,7 +300,6 @@ class ChatSessionViewSet(viewsets.ViewSet):
         assistant_msg_result = get_collection('chat_messages').insert_one(assistant_message_data)
         assistant_message_data['_id'] = assistant_msg_result.inserted_id
 
-        # Update session timestamp
         get_collection('chat_sessions').update_one(
             {'_id': ObjectId(pk)},
             {'$set': {'updated_at': datetime.utcnow()}}
@@ -299,8 +324,7 @@ class ChatSessionViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['post'], url_path='send_message_stream')
     def send_message_stream(self, request, pk=None):
-        """Stream chat response using Server-Sent Events"""
-        # Validate session
+        """Stream chat response using Server-Sent Events — tokens arrive in real-time."""
         try:
             session = get_collection('chat_sessions').find_one({
                 '_id': ObjectId(pk),
@@ -321,7 +345,6 @@ class ChatSessionViewSet(viewsets.ViewSet):
 
         model = request.data.get('model')
 
-        # Save user message to MongoDB
         user_message_data = {
             'session_id': pk,
             'user_id': request.user.id,
@@ -333,7 +356,6 @@ class ChatSessionViewSet(viewsets.ViewSet):
         user_msg_result = get_collection('chat_messages').insert_one(user_message_data)
         user_message_id = str(user_msg_result.inserted_id)
 
-        # Get course_id and conversation history
         course_id = session.get('course_id')
         recent_messages = list(
             get_collection('chat_messages')
@@ -348,19 +370,42 @@ class ChatSessionViewSet(viewsets.ViewSet):
         ]
 
         def event_stream():
-            # Send start event with user message ID
-            logger.info(f"[Stream] Starting event stream for session {pk}, question: {content[:50]}")
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            from apps.documents.services.config import LLM_MODEL
+            from apps.documents.rag.tools import AVAILABLE_TOOLS, execute_tool
+            from apps.documents.rag.agent import AGENT_SYSTEM_PROMPT
+            from django.conf import settings
+
+            logger.info(f"[Stream] Starting for session {pk}, question: {content[:50]}")
             yield f"data: {json.dumps({'type': 'start', 'user_message_id': user_message_id})}\n\n"
 
             full_response = ""
             sources = []
+            tool_used = None
+            tool_result_raw = None
 
             try:
-                # Use RAGAgent for intelligent function calling (RAG + Admin DB queries)
-                logger.info(f"[Stream] Initializing RAGAgent with model: {model}")
-                rag_agent = RAGAgent(model=model)
+                # ── Non-streaming LLM: for tool decision detection ─────────────
+                # IMPORTANT: streaming=True changes invoke() to return AsyncIterator,
+                # which cannot access tool_calls. We need a separate non-streaming instance.
+                llm_non_streaming = ChatGoogleGenerativeAI(
+                    model=model or LLM_MODEL,
+                    google_api_key=settings.GEMINI_API_KEY,
+                    temperature=0.7,
+                    max_tokens=4096,
+                    streaming=False,
+                )
 
-                # Get course info if available
+                # ── Streaming-capable LLM: for token-by-token streaming ─────────
+                # Use stream() method (not streaming=True + invoke()) for real token streaming
+                llm_streaming = ChatGoogleGenerativeAI(
+                    model=model or LLM_MODEL,
+                    google_api_key=settings.GEMINI_API_KEY,
+                    temperature=0.7,
+                    max_tokens=4096,
+                )
+
+                # Course context
                 if course_id:
                     try:
                         course = Course.objects.get(id=course_id)
@@ -370,42 +415,114 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 else:
                     course_name = session.get('course_name', '')
 
-                logger.info(f"[Stream] Processing with agent: course_id={course_id}, user_id={request.user.id}")
+                # Build LLM messages
+                messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+                for msg in conversation_history[:-1]:
+                    role = msg.get('role', 'user')
+                    if role in ('user', 'assistant'):
+                        messages.append({"role": role, "content": msg.get('content', '')})
+                messages.append({"role": "user", "content": content})
 
-                # Invoke agent once - it handles routing (RAG vs admin DB)
-                result = rag_agent.invoke(
-                    question=content,
-                    course_id=course_id,
-                    course_name=course_name,
-                    conversation_history=conversation_history[:-1],
-                    user_id=request.user.id,
-                )
+                # ── LLM call #1: detect tool (non-streaming → returns BaseMessage) ─
+                logger.info("[Stream] LLM call #1 — tool decision (non-streaming)")
+                response = llm_non_streaming.invoke(messages, tools=AVAILABLE_TOOLS)
+                logger.info(f"[Stream] LLM response type: {type(response)}, content: {str(response.content)[:200]}")
 
-                answer = result.get('answer', '')
-                sources = result.get('sources', [])
-                tool_used = result.get('tool_used')
+                # Check tool_calls attribute safely
+                response_tool_calls = getattr(response, 'tool_calls', None)
+                tool_called = response_tool_calls and len(response_tool_calls) > 0
+                logger.info(f"[Stream] tool_called={tool_called}, tool_calls={response_tool_calls}")
 
-                logger.info(f"[Stream] Agent used tool: {tool_used}, answer length: {len(answer)}")
+                if tool_called:
+                    # ── Tool mode ─────────────────────────────────────────────
+                    tool_call = response.tool_calls[0]
+                    tool_name = tool_call.get('name', '')
+                    tool_args = tool_call.get('args', {})
+                    tool_used = tool_name
+                    logger.info(f"[Stream] Tool called: {tool_name} | args: {tool_args}")
 
-                # Stream the pre-computed answer in chunks
-                chunk_size = 10
-                for i in range(0, len(answer), chunk_size):
-                    chunk = answer[i:i + chunk_size]
-                    full_response += chunk
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+                    # Notify frontend that a tool is running
+                    yield f"data: {json.dumps({'type': 'tool_call', 'tool': tool_name})}\n\n"
 
-                logger.info(f"[Stream] Streaming complete. Response length: {len(full_response)}")
+                    # Execute the tool (synchronous — fast)
+                    tool_result_raw = execute_tool(
+                        tool_name=tool_name,
+                        params=tool_args,
+                        course_id=course_id,
+                        course_name=course_name,
+                        user_id=request.user.id,
+                    )
+                    logger.info(f"[Stream] Tool result: {tool_result_raw[:200]}...")
+
+                    # Emit practice quiz immediately if generated
+                    if tool_name == 'generate_practice_quiz':
+                        try:
+                            quiz_data = json.loads(tool_result_raw)
+                            if 'questions' in quiz_data:
+                                quiz_payload = json.dumps({
+                                    'type': 'practice_quiz',
+                                    'questions': quiz_data['questions'],
+                                    'topic': quiz_data.get('topic', ''),
+                                })
+                                yield f"data: {quiz_payload}\n\n"
+                        except Exception as e:
+                            logger.error(f"Failed to emit practice quiz: {e}")
+
+                    # ── LLM call #2: stream natural answer token-by-token ────
+                    # (use streaming LLM so tokens arrive as they are generated)
+                    final_prompt = (
+                        f"Kết quả tra cứu từ hệ thống (tool '{tool_name}'):\n"
+                        f"---\n{tool_result_raw}\n---\n\n"
+                        f"Dựa trên dữ liệu trên, hãy trả lời câu hỏi của sinh viên "
+                        f"một cách tự nhiên, thân thiện và dễ hiểu:\n{content}"
+                    )
+                    logger.info("[Stream] LLM call #2 — streaming final answer")
+                    final_response = llm_streaming.stream([
+                        {"role": "system", "content": AGENT_SYSTEM_PROMPT},
+                        {"role": "user", "content": final_prompt},
+                    ])
+
+                    # Stream each token as it arrives from Gemini
+                    for chunk in final_response:
+                        if hasattr(chunk, 'content') and chunk.content:
+                            full_response += chunk.content
+                            yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content})}\n\n"
+                            # Small delay so streaming feels natural on short answers
+                            time.sleep(0.02)
+
+                    logger.info(f"[Stream] Tool-mode done. Response length: {len(full_response)}")
+
+                    # Extract sources for search_documents
+                    if tool_name == 'search_documents':
+                        from apps.documents.rag.retriever import DocumentRetriever
+                        retriever = DocumentRetriever()
+                        retrieval = retriever.retrieve_with_context(
+                            query=tool_args.get('query', content),
+                            course_id=course_id,
+                        )
+                        sources = retrieval.get('sources', [])
+
+                else:
+                    # ── Direct answer: stream tokens as they arrive ────────────
+                    # Use streaming LLM so tokens arrive in real-time
+                    logger.info("[Stream] No tool — streaming direct answer")
+                    direct_response = llm_streaming.stream(messages)
+
+                    for chunk in direct_response:
+                        if hasattr(chunk, 'content') and chunk.content:
+                            full_response += chunk.content
+                            yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content})}\n\n"
+                            time.sleep(0.02)
+                    logger.info(f"[Stream] Direct streaming done. Length: {len(full_response)}")
 
             except Exception as e:
-                logger.error(f"Streaming RAG error: {e}", exc_info=True)
+                logger.error(f"Streaming error: {e}", exc_info=True)
                 error_msg = "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi. Vui lòng thử lại sau."
                 full_response = error_msg
                 yield f"data: {json.dumps({'type': 'chunk', 'content': error_msg})}\n\n"
 
-            # Format sources for storage - keep full source objects for frontend
+            # ── Post-processing: save to MongoDB ───────────────────────────────
             source_labels = [s.get('source', '') for s in sources if s.get('source')]
-
-            # Also send full source objects in SSE for better frontend display
             sources_for_frontend = [
                 {
                     'document_title': s.get('document_title', ''),
@@ -415,36 +532,46 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 for s in sources if s.get('source')
             ]
 
-            # Save assistant message to MongoDB
             assistant_message_data = {
                 'session_id': pk,
                 'user_id': request.user.id,
                 'message_type': 'assistant',
                 'content': full_response,
                 'sources': source_labels,
-                'sources': source_labels,
                 'created_at': datetime.utcnow(),
             }
-            result = get_collection('chat_messages').insert_one(assistant_message_data)
-            assistant_message_id = str(result.inserted_id)
 
-            # Auto-generate title if this is first message
+            if tool_used == 'generate_practice_quiz' and tool_result_raw:
+                try:
+                    quiz_data = json.loads(tool_result_raw)
+                    if 'questions' in quiz_data:
+                        assistant_message_data['practice_quiz'] = {
+                            'questions': quiz_data['questions'],
+                            'topic': quiz_data.get('topic', ''),
+                            'answers': None,
+                            'result': None,
+                        }
+                except Exception as e:
+                    logger.error(f"Failed to attach practice quiz: {e}")
+
+            db_result = get_collection('chat_messages').insert_one(assistant_message_data)
+            assistant_message_id = str(db_result.inserted_id)
+
+            # Auto-generate session title from first message
             session = get_collection('chat_sessions').find_one({'_id': ObjectId(pk)})
             if session and session.get('title', '').startswith('Cuộc trò chuyện mới'):
-                # Generate title from first user message
                 title = content[:50] + '...' if len(content) > 50 else content
                 get_collection('chat_sessions').update_one(
                     {'_id': ObjectId(pk)},
                     {'$set': {'title': title, 'updated_at': datetime.utcnow()}}
                 )
 
-            # Update session timestamp
             get_collection('chat_sessions').update_one(
                 {'_id': ObjectId(pk)},
                 {'$set': {'updated_at': datetime.utcnow()}}
             )
 
-            # Send sources and done event - use full source objects for better frontend display
+            # Final events
             yield f"data: {json.dumps({'type': 'sources', 'sources': sources_for_frontend})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'assistant_message_id': assistant_message_id})}\n\n"
 

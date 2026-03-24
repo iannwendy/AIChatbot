@@ -44,6 +44,11 @@ QUY TẮC CHỌN TOOL:
 14. "Học kỳ hiện tại", "đang học kỳ mấy" → get_current_semester
 15. "Ngành học", "chuyên ngành" → get_majors
 16. Kiến thức môn học, lý thuyết → search_documents
+17. "tạo câu hỏi", "ôn tập", "làm bài tập", "practice quiz", "tạo quiz",
+    "tạo cho tôi N câu", "N câu hỏi" → generate_practice_quiz
+    - Trích xuất số câu hỏi: "5 câu" → num_questions=5 (mặc định 5)
+    - Trích xuất chủ đề: "chương 2" → topic="chương 2" (mặc định rỗng=lấy toàn bộ)
+    - KHÔNG lưu quiz vào database — chỉ trả về JSON
 
 PHONG CÁCH TRẢ LỜI:
 - Tiếng Việt, rõ ràng, thân thiện
@@ -95,7 +100,7 @@ class RAGAgent:
             user_id: Logged-in user's ID (for personal queries like grades, fees)
 
         Returns:
-            Dict with 'answer', 'sources', 'tool_used'
+            Dict with 'answer', 'sources', 'tool_used', 'tool_result_raw'
         """
         # Build messages
         messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
@@ -167,6 +172,7 @@ class RAGAgent:
                 'answer': answer,
                 'sources': sources,
                 'tool_used': tool_name,
+                'tool_result_raw': tool_result,
             }
 
         # No tool call — LLM answered directly
@@ -174,6 +180,7 @@ class RAGAgent:
             'answer': response.content,
             'sources': [],
             'tool_used': None,
+            'tool_result_raw': None,
         }
 
     def stream(

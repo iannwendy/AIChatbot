@@ -16,6 +16,27 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 AVAILABLE_TOOLS = [
+    # --- Practice Quiz Generator ---
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_practice_quiz",
+            "description": "Tạo bài tập trắc nghiệm ôn tập từ tài liệu khóa học. Dùng khi sinh viên yêu cầu 'tạo câu hỏi', 'ôn tập', 'làm bài tập', 'practice quiz'. KHÔNG lưu vào database - chỉ trả về JSON câu hỏi để hiển thị trong chat.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "num_questions": {
+                        "type": "integer",
+                        "description": "Số câu hỏi (mặc định 5)"
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Chủ đề/chương cần ôn tập (VD: 'chương 2', 'từ vựng bài 3')"
+                    }
+                }
+            }
+        }
+    },
     # --- Document Search ---
     {
         "type": "function",
@@ -275,6 +296,11 @@ def execute_tool(
     """
     try:
         tool_map = {
+            "generate_practice_quiz": lambda: _generate_practice_quiz(
+                params.get("num_questions", 5),
+                params.get("topic", ""),
+                course_id,
+            ),
             "search_documents": lambda: _search_documents(params.get("query", ""), course_id),
             "get_exam_schedule": lambda: _get_exam_schedule(course_id, course_name),
             "get_course_info": lambda: _get_course_info(course_id, course_name),
@@ -307,6 +333,77 @@ def execute_tool(
 # ============================================================
 # TOOL IMPLEMENTATIONS
 # ============================================================
+
+import json as _json
+
+
+def _generate_practice_quiz(num_questions: int, topic: str, course_id: int) -> str:
+    """Generate practice quiz from course documents — NO database save."""
+    from .retriever import DocumentRetriever
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from django.conf import settings
+    from apps.documents.services.config import LLM_MODEL
+
+    if not course_id:
+        return _json.dumps({"error": "Không có thông tin môn học để tạo quiz."})
+
+    retriever = DocumentRetriever()
+    results = retriever.retrieve(query=topic or "", course_id=course_id, top_k=10)
+    if not results:
+        return _json.dumps({
+            "error": "Không có tài liệu nào cho chủ đề này. Vui lòng yêu cầu một chủ đề khác hoặc kiểm tra tài liệu đã upload."
+        })
+
+    context = "\n\n".join([r["text"][:500] for r in results[:5]])
+    prompt = f"""Dựa trên nội dung tài liệu sau, tạo {num_questions} câu hỏi trắc nghiệm ôn tập.
+
+Nội dung tài liệu:
+{context}
+
+Chủ đề: {topic or 'Tổng quát'}
+
+Trả về CHÍNH XÁC một JSON array, KHÔNG có gì khác ngoài JSON:
+[
+  {{
+    "id": 0,
+    "question": "Câu hỏi",
+    "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+    "correct": 0,
+    "explanation": "Giải thích ngắn gọn"
+  }}
+]"""
+
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model=LLM_MODEL,
+            google_api_key=settings.GEMINI_API_KEY,
+            temperature=0.7,
+        )
+        response = llm.invoke([{"role": "user", "content": prompt}])
+        content = response.content.strip()
+
+        # Strip markdown code fences
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
+
+        questions_data = _json.loads(content.strip())
+
+        # Normalise field names: "question" → "question_text" for frontend
+        for i, q in enumerate(questions_data):
+            q["id"] = i
+            q["question_text"] = q.pop("question", "")
+            q["correct_answer"] = q.pop("correct", 0)
+
+        return _json.dumps({
+            "questions": questions_data,
+            "topic": topic or "Tổng quát",
+        })
+    except Exception as e:
+        logger.error(f"Practice quiz generation failed: {e}", exc_info=True)
+        return _json.dumps({"error": f"Lỗi khi tạo câu hỏi: {str(e)}"})
+
 
 def _search_documents(query: str, course_id: int) -> str:
     """Search course documents using hybrid retrieval."""

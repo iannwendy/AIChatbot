@@ -454,8 +454,7 @@ import {
   useNavigate,
   useOutletContext,
 } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MathRenderer } from "../components/chat/MathRenderer";
 import {
   HiOutlineCpuChip,
   HiChevronDown,
@@ -468,17 +467,36 @@ import ShimmerLoader from "../components/chat/ShimmerLoader";
 import SourceCitation from "../components/chat/SourceCitation";
 import ChatInput from "../components/chat/ChatInput";
 import QuizInChat from "../components/chat/QuizInChat";
+import PracticeQuizInChat, { PracticeQuestion } from "../components/chat/PracticeQuizInChat";
 import { chatAPI, coursesAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
 /* ── Types ── */
 interface Message {
-  id: number;
+  id: string;
   type: "user" | "assistant";
   content: string;
   timestamp: string;
   sources?: string[];
+  practice_quiz?: {
+    questions: PracticeQuestion[];
+    topic: string;
+    answers: Record<number, number> | null;
+    result: {
+      score: number;
+      total: number;
+      percentage: number;
+      results: Array<{
+        question_text: string;
+        options: string[];
+        selected_option: number | null;
+        correct_answer: number;
+        is_correct: boolean;
+        explanation: string;
+      }>;
+    } | null;
+  };
 }
 
 interface ModelOption {
@@ -598,11 +616,12 @@ const ChatPage: React.FC = () => {
       if (res.data.messages) {
         setMessages(
           res.data.messages.map((m: any) => ({
-            id: m.id || Date.now(),
+            id: String(m.id || `msg-${Date.now()}`),
             type: m.message_type,
             content: m.content,
             timestamp: m.created_at || new Date().toISOString(),
             sources: m.sources || [],
+            practice_quiz: m.practice_quiz || undefined,
           })),
         );
         // Scroll to bottom after loading history
@@ -645,13 +664,13 @@ const ChatPage: React.FC = () => {
       }
 
       const userMessage: Message = {
-        id: Date.now(),
+        id: `temp-${Date.now()}`,
         type: "user",
         content: input,
         timestamp: new Date().toISOString(),
       };
 
-      const assistantMessageId = Date.now() + 1;
+      const assistantMessageId = `temp-${Date.now() + 1}`;
       const assistantMessage: Message = {
         id: assistantMessageId,
         type: "assistant",
@@ -736,6 +755,22 @@ const ChatPage: React.FC = () => {
                   prev.map((m) =>
                     m.id === assistantMessageId
                       ? { ...m, sources: data.sources }
+                      : m,
+                  ),
+                );
+              } else if (data.type === "practice_quiz") {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMessageId
+                      ? {
+                          ...m,
+                          practice_quiz: {
+                            questions: data.questions,
+                            topic: data.topic,
+                            answers: null,
+                            result: null,
+                          },
+                        }
                       : m,
                   ),
                 );
@@ -950,13 +985,15 @@ const ChatPage: React.FC = () => {
                   >
                     {message.type === "assistant" ? (
                       <div className="markdown-content text-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {message.content ||
+                        <MathRenderer
+                          content={
+                            message.content ||
                             (isStreaming &&
                             message.id === messages[messages.length - 1]?.id
                               ? "Đang trả lời..."
-                              : "")}
-                        </ReactMarkdown>
+                              : "")
+                          }
+                        />
                         {isStreaming &&
                           message.id === messages[messages.length - 1]?.id && (
                             <span className="inline-block w-2 h-4 bg-gray-400 ml-0.5 animate-pulse" />
@@ -972,6 +1009,30 @@ const ChatPage: React.FC = () => {
                   {/* Source Citations */}
                   {message.type === "assistant" && (
                     <SourceCitation sources={message.sources || []} />
+                  )}
+
+                  {/* Inline Practice Quiz (from LLM or loaded from history) */}
+                  {message.type === "assistant" && message.practice_quiz && (
+                    <div className="mt-3 max-w-3xl mx-auto w-full">
+                      <PracticeQuizInChat
+                        sessionId={sessionId || chatId || ""}
+                        messageId={message.id}
+                        questions={message.practice_quiz.questions}
+                        topic={message.practice_quiz.topic}
+                        initialAnswers={message.practice_quiz.answers}
+                        initialResult={message.practice_quiz.result}
+                        onSubmit={(answers, result) => {
+                          // Update local message state so UI re-renders with result
+                          setMessages(prev =>
+                            prev.map(m =>
+                              m.id === message.id
+                                ? { ...m, practice_quiz: { ...m.practice_quiz!, answers, result } }
+                                : m
+                            )
+                          );
+                        }}
+                      />
+                    </div>
                   )}
 
                   {/* Timestamp */}
@@ -1009,7 +1070,7 @@ const ChatPage: React.FC = () => {
         )}
       </div>
 
-      {/* Quiz Panel */}
+      {/* Quiz Panel (instructor-created quizzes) */}
       {showQuizPanel && courseInfo && (
         <div className="px-4 py-3 max-w-3xl mx-auto w-full">
           <QuizInChat courseId={courseInfo.id} />
