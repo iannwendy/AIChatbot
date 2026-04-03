@@ -164,59 +164,6 @@ const ProfilePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Preferences Card */}
-        <div className={`rounded-2xl p-6 mb-6 border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
-            Cài đặt ưu tiên
-          </h3>
-
-          <div className="space-y-4">
-            {/* Language */}
-
-
-            {/* Theme Toggle */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {theme === 'light' ? (
-                  <HiOutlineSun className="w-5 h-5 text-gray-400" />
-                ) : (
-                  <HiOutlineMoon className="w-5 h-5 text-gray-400" />
-                )}
-                <span className="text-sm text-gray-700">Giao diện</span>
-              </div>
-              <button
-                onClick={toggleTheme}
-                className={`relative w-12 h-6 rounded-full transition-colors ${
-                  theme === 'dark' ? 'bg-blue-500' : 'bg-gray-300'
-                }`}
-              >
-                <div
-                  className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                    theme === 'dark' ? 'translate-x-6' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-
-            {/* Model Selection */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <HiOutlineCpuChip className="w-5 h-5 text-gray-400" />
-                <span className="text-sm text-gray-700">AI Model</span>
-              </div>
-              <select
-                value={selectedModel}
-                onChange={e => setSelectedModel(e.target.value)}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-              >
-                <option value="gemini-2.0-flash">Gemini Flash</option>
-                <option value="gemini-2.0-pro">Gemini Pro</option>
-                <option value="local-llm">Local LLM</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
         {/* Save Button */}
         <button
           onClick={handleSave}
@@ -227,7 +174,7 @@ const ProfilePage: React.FC = () => {
               : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50'
           }`}
         >
-          {saving ? 'Đang lưu...' : saved ? 'Đã lưu thành công' : 'Save Changes'}
+          {saving ? 'Đang lưu...' : saved ? 'Đã lưu thành công' : 'Lưu thay đổi'}
         </button>
       </div>
     </div>

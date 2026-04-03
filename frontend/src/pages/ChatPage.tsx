@@ -473,12 +473,21 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
 /* ── Types ── */
+export interface AttachedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url?: string;
+}
+
 interface Message {
   id: string;
   type: "user" | "assistant";
   content: string;
   timestamp: string;
   sources?: string[];
+  files?: AttachedFile[];
   practice_quiz?: {
     questions: PracticeQuestion[];
     topic: string;
@@ -635,7 +644,7 @@ const ChatPage: React.FC = () => {
   };
 
   const handleSend = useCallback(
-    async (input: string) => {
+    async (input: string, files?: File[]) => {
       // Auto-create session if none exists - use chatId from URL if available
       let currentSessionId = sessionId || chatId;
       isSendingRef.current = true;
@@ -663,11 +672,21 @@ const ChatPage: React.FC = () => {
         }
       }
 
+      const attachedFiles: AttachedFile[] = files
+        ? files.map((f, i) => ({
+            id: `local-${Date.now()}-${i}`,
+            name: f.name,
+            size: f.size,
+            type: f.type,
+          }))
+        : [];
+
       const userMessage: Message = {
         id: `temp-${Date.now()}`,
         type: "user",
         content: input,
         timestamp: new Date().toISOString(),
+        files: attachedFiles.length > 0 ? attachedFiles : undefined,
       };
 
       const assistantMessageId = `temp-${Date.now() + 1}`;
@@ -694,6 +713,7 @@ const ChatPage: React.FC = () => {
           currentSessionId!,
           input,
           selectedModel,
+          files,
         );
         console.log(
           "[Chat] Stream response status:",
@@ -1011,6 +1031,29 @@ const ChatPage: React.FC = () => {
                     <SourceCitation sources={message.sources || []} />
                   )}
 
+                  {/* Attached Files */}
+                  {message.files && message.files.length > 0 && (
+                    <div className={`flex flex-wrap gap-2 mt-2 ${message.type === "user" ? "justify-end" : ""}`}>
+                      {message.files.map((file) => (
+                        <div
+                          key={file.id}
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs max-w-[200px] ${
+                            message.type === "user"
+                              ? "bg-blue-400/30 text-white"
+                              : isDark
+                                ? "bg-gray-700 text-gray-300"
+                                : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="truncate">{file.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Inline Practice Quiz (from LLM or loaded from history) */}
                   {message.type === "assistant" && message.practice_quiz && (
                     <div className="mt-3 max-w-3xl mx-auto w-full">
@@ -1080,7 +1123,8 @@ const ChatPage: React.FC = () => {
       {/* Input Area */}
       <ChatInput
         onSend={handleSend}
-        disabled={isStreaming}
+        disabled={!courseId || isStreaming}
+        disabledHint={!courseId ? "Vui lòng chọn môn học để bắt đầu trò chuyện" : undefined}
         onNewChat={handleNewChat}
       />
     </div>

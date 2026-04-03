@@ -122,6 +122,35 @@ class TXTParser(DocumentParser):
         return pages
 
 
+def extract_text_from_bytes(file_content: bytes, filename: str) -> str:
+    """Extract all text from a file given its bytes and filename."""
+    if not filename or '.' not in filename:
+        return ''
+    ext = filename.rsplit('.', 1)[-1].lower()
+    try:
+        pages = ParserFactory.parse(ext, file_content)
+        return '\n\n'.join(p.get('text', '') for p in pages if p.get('text'))
+    except Exception as e:
+        logger.warning(f"extract_text_from_bytes failed for {filename}: {e}")
+        return ''
+
+
+def extract_pages_from_bytes(file_content: bytes, filename: str) -> List[Dict[str, Any]]:
+    """
+    Extract page-level structured data from a file.
+    Returns list of {'page_number': int, 'text': str, 'total_pages': int}.
+    Falls back to a single chunk if parsing fails.
+    """
+    if not filename or '.' not in filename:
+        return []
+    ext = filename.rsplit('.', 1)[-1].lower()
+    try:
+        return ParserFactory.parse(ext, file_content)
+    except Exception as e:
+        logger.warning(f"extract_pages_from_bytes failed for {filename}: {e}")
+        return [{'page_number': 1, 'text': '', 'total_pages': 0}]
+
+
 class ParserFactory:
     """Factory to get the right parser based on file type."""
 

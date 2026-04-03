@@ -120,7 +120,7 @@ const SettingsPage: React.FC = () => {
               : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50'
           }`}
         >
-          {saving ? 'Đang lưu...' : saved ? 'Đã lưu thành công' : 'Save Changes'}
+          {saving ? 'Đang lưu...' : saved ? 'Đã lưu thành công' : 'Lưu thay đổi'}
         </button>
       </div>
     </div>

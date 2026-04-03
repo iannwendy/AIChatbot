@@ -121,6 +121,7 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 'message_type': msg['message_type'],
                 'content': msg['content'],
                 'sources': msg.get('sources', []),
+                'files': msg.get('files'),
                 'practice_quiz': msg.get('practice_quiz'),
                 'created_at': msg['created_at'].isoformat() if msg.get('created_at') else None,
             } for msg in messages]
@@ -345,11 +346,45 @@ class ChatSessionViewSet(viewsets.ViewSet):
 
         model = request.data.get('model')
 
+        # ── Extract text from uploaded files ─────────────────────────────────
+        file_texts = []
+        uploaded_files = []
+        uploaded_file_pages = []          # list of {filename, pages: [{page_number, text}]}
+        files = request.FILES.getlist('files')
+        if files:
+            from apps.documents.services.parsers import extract_pages_from_bytes
+            for f in files:
+                file_content = f.read()
+                pages = extract_pages_from_bytes(file_content, f.name)
+                file_ext = f.name.rsplit('.', 1)[-1].lower() if '.' in f.name else ''
+                uploaded_files.append({
+                    'name': f.name,
+                    'size': f.size,
+                    'type': file_ext,
+                })
+                uploaded_file_pages.append({'filename': f.name, 'pages': pages})
+                text = '\n\n'.join(p.get('text', '') for p in pages if p.get('text'))
+                if text:
+                    file_texts.append(f"[Tài liệu: {f.name}]\n{text}")
+                else:
+                    logger.warning(f"No text extracted from file: {f.name}")
+
+            if file_texts:
+                content = (
+                    "Sinh viên đính kèm các tài liệu sau đây. Hãy đọc và trả lời dựa trên nội dung của chúng. "
+                    "Khi trả lời, hãy ghi rõ thông tin lấy từ tài liệu nào và trang số mấy (ví dụ: trang 3 của file X). "
+                    "Nếu nội dung hỏi không có trong tài liệu, hãy nói rõ.\n\n"
+                    + "\n\n".join(file_texts)
+                    + f"\n\nCâu hỏi của sinh viên: {request.data.get('content', '')}"
+                )
+                logger.info(f"[File] Attached {len(file_texts)} file(s): {[f['name'] for f in uploaded_files]}")
+
         user_message_data = {
             'session_id': pk,
             'user_id': request.user.id,
             'message_type': 'user',
-            'content': content,
+            'content': request.data.get('content', ''),  # store original message text
+            'files': uploaded_files if uploaded_files else None,
             'sources': [],
             'created_at': datetime.utcnow(),
         }
@@ -522,22 +557,36 @@ class ChatSessionViewSet(viewsets.ViewSet):
                 yield f"data: {json.dumps({'type': 'chunk', 'content': error_msg})}\n\n"
 
             # ── Post-processing: save to MongoDB ───────────────────────────────
-            source_labels = [s.get('source', '') for s in sources if s.get('source')]
+            # Build sources from uploaded files (page-level)
+            file_sources = []
+            for fp in uploaded_file_pages:
+                # Only add pages that have non-empty text
+                non_empty_pages = [p for p in fp['pages'] if p.get('text')]
+                if non_empty_pages:
+                    file_sources.append({
+                        'document_title': fp['filename'],
+                        'page_number': non_empty_pages[0].get('page_number'),
+                        'total_pages': fp['pages'][0].get('total_pages') if fp['pages'] else 0,
+                        'source': fp['filename'],
+                    })
+
             sources_for_frontend = [
                 {
                     'document_title': s.get('document_title', ''),
                     'page_number': s.get('page_number'),
+                    'total_pages': s.get('total_pages'),
                     'source': s.get('source', ''),
                 }
                 for s in sources if s.get('source')
-            ]
+            ] + file_sources
 
             assistant_message_data = {
                 'session_id': pk,
                 'user_id': request.user.id,
                 'message_type': 'assistant',
+                'files': uploaded_files if uploaded_files else None,
                 'content': full_response,
-                'sources': source_labels,
+                'sources': sources_for_frontend,   # structured sources w/ page info for file uploads
                 'created_at': datetime.utcnow(),
             }
 

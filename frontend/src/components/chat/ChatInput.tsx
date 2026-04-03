@@ -5,10 +5,11 @@ import { useTheme } from '../../context/ThemeContext';
 interface ChatInputProps {
   onSend: (message: string, files?: File[]) => void;
   disabled?: boolean;
+  disabledHint?: string;
   onNewChat?: () => void;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled, onNewChat }) => {
+const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled, disabledHint, onNewChat }) => {
   const [input, setInput] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -116,6 +117,12 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled, onNewChat }) =>
           </div>
         )}
       </div>
+
+      {disabledHint && (
+        <p className={`text-xs text-center mt-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+          {disabledHint}
+        </p>
+      )}
     </div>
   );
 };

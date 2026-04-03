@@ -208,9 +208,28 @@ export const chatAPI = {
     api.get(`/chat/sessions/${sessionId}/`),
   sendMessage: (sessionId: string, content: string, model?: string) =>
     api.post(`/chat/sessions/${sessionId}/send_message/`, { content, model }),
-  sendMessageStream: (sessionId: string, content: string, model?: string) => {
+  sendMessageStream: (sessionId: string, content: string, model?: string, files?: File[]) => {
     const token = localStorage.getItem('token');
     const csrfToken = getCSRFToken();
+
+    // Use FormData when files are attached; plain JSON otherwise
+    if (files && files.length > 0) {
+      const formData = new FormData();
+      formData.append('content', content);
+      if (model) formData.append('model', model);
+      files.forEach(f => formData.append('files', f));
+      return fetch(`${API_BASE_URL}/chat/sessions/${sessionId}/send_message_stream/`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
+          // Do NOT set Content-Type: multipart/form-data — browser sets it with boundary
+        },
+        credentials: 'include',
+        body: formData,
+      });
+    }
+
     return fetch(`${API_BASE_URL}/chat/sessions/${sessionId}/send_message_stream/`, {
       method: 'POST',
       headers: {
