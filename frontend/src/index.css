@@ -63,7 +63,14 @@
   background: #a1a1a1;
 }
 
-/* Sidebar scrollbar */
+/* Spin animation for AI loading ring */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 1.5s linear infinite;
+}
 .sidebar-scrollbar::-webkit-scrollbar {
   width: 4px;
 }

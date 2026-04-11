@@ -982,11 +982,19 @@ const ChatPage: React.FC = () => {
                       </span>
                     )
                   ) : (
-                    <img
-                      src="/logo_2.png"
-                      alt="AI"
-                      className="w-5 h-5 object-contain"
-                    />
+                    <div className="relative w-8 h-8 flex items-center justify-center">
+                      {isStreaming && message.id === messages[messages.length - 1]?.id && (
+                        <div
+                          className="absolute inset-0 rounded-full border-2 border-t-blue-500 border-r-blue-300 border-b-blue-300 border-l-blue-500"
+                          style={{ animation: 'spin-slow 1.5s linear infinite' }}
+                        />
+                      )}
+                      <img
+                        src="/logo_2.png"
+                        alt="AI"
+                        className="w-5 h-5 object-contain relative z-10"
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -1006,18 +1014,8 @@ const ChatPage: React.FC = () => {
                     {message.type === "assistant" ? (
                       <div className="markdown-content text-sm">
                         <MathRenderer
-                          content={
-                            message.content ||
-                            (isStreaming &&
-                            message.id === messages[messages.length - 1]?.id
-                              ? "Đang trả lời..."
-                              : "")
-                          }
+                          content={message.content}
                         />
-                        {isStreaming &&
-                          message.id === messages[messages.length - 1]?.id && (
-                            <span className="inline-block w-2 h-4 bg-gray-400 ml-0.5 animate-pulse" />
-                          )}
                       </div>
                     ) : (
                       <p className="text-sm whitespace-pre-wrap">

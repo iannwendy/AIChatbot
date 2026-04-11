@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HiPlay, HiBookOpen, HiCheckCircle, HiXCircle, HiChevronUp, HiChevronDown, HiQuestionMarkCircle } from 'react-icons/hi2';
+import { HiPlay, HiBookOpen, HiCheckCircle, HiXCircle, HiChevronDown, HiQuestionMarkCircle } from 'react-icons/hi2';
 import { quizAPI } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -205,7 +205,7 @@ const QuizInChat: React.FC<QuizInChatProps> = ({ courseId }) => {
             className={`p-1 rounded ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-blue-100 text-blue-500'}`}
             title="Thu nhỏ"
           >
-            <HiChevronUp className="w-4 h-4" />
+            <HiChevronDown className="w-4 h-4" />
           </button>
         </div>
 
@@ -341,7 +341,7 @@ const QuizInChat: React.FC<QuizInChatProps> = ({ courseId }) => {
             className={`p-1 rounded ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-blue-100 text-blue-500'}`}
             title="Thu nhỏ"
           >
-            <HiChevronUp className="w-4 h-4" />
+            <HiChevronDown className="w-4 h-4" />
           </button>
         </div>
 

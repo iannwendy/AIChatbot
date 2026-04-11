@@ -68,6 +68,9 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSuggestionClick }) => {
         <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>
           Chọn môn học để bắt đầu hỏi đáp với AI
         </p>
+        <p className={`text-sm mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+          Bạn được tự động thêm vào lớp. Nếu không thấy lớp của mình, vui lòng liên hệ giảng viên phụ trách.
+        </p>
       </div>
 
       {/* Enrolled Courses */}

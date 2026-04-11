@@ -7,9 +7,10 @@ interface ChatInputProps {
   disabled?: boolean;
   disabledHint?: string;
   onNewChat?: () => void;
+  onAfterSend?: () => void;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled, disabledHint, onNewChat }) => {
+const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled, disabledHint, onNewChat, onAfterSend }) => {
   const [input, setInput] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -30,6 +31,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled, disabledHint, o
       onSend(input.trim(), attachedFiles.length > 0 ? attachedFiles : undefined);
       setInput('');
       setAttachedFiles([]);
+      onAfterSend?.();
     }
   };
 
